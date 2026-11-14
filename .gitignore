@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.test
+
+# Test output
+coverage/
+.vitest/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Tooling
+.turbo/
+.eslintcache

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: queuepilot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-queue}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-queue_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-queuepilot}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - queuepilot_pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-queue} -d ${POSTGRES_DB:-queuepilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  queuepilot_pgdata:
