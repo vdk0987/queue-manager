@@ -52,7 +52,7 @@ export function Topbar({ onOpenSidebar, pageTitle }: TopbarProps) {
       <div className="flex items-center gap-2.5">
         <Badge variant="outline" className="hidden bg-card/80 sm:inline-flex">
           <span className="size-1.5 rounded-full bg-emerald-500" />
-          Phase 1 · Live
+          Phase 2 · Live
         </Badge>
 
         <div className="hidden h-5 w-px bg-border sm:block" />

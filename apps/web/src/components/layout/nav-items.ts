@@ -10,7 +10,7 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/queues", label: "Queues", icon: ListOrdered, phase: "Phase 2" },
+  { to: "/queues", label: "Queues", icon: ListOrdered },
   { to: "/analytics", label: "Analytics", icon: BarChart3, phase: "Phase 5" },
 ];
 

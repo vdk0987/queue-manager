@@ -6,6 +6,7 @@ import { AnalyticsPage } from "@/pages/analytics-page";
 import { AuthPage } from "@/pages/auth-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { NotFoundPage } from "@/pages/not-found-page";
+import { QueueDetailsPage } from "@/pages/queue-details-page";
 import { QueuesPage } from "@/pages/queues-page";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="queues" element={<QueuesPage />} />
+            <Route path="queues/:id" element={<QueueDetailsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
           </Route>
         </Route>

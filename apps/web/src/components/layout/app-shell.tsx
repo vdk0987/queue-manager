@@ -39,7 +39,7 @@ export function AppShell() {
           <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center justify-between gap-1.5 text-[0.6875rem] text-muted-foreground sm:flex-row">
             <span>© {new Date().getFullYear()} QueuePilot · Manager workspace</span>
             <span className="font-medium uppercase tracking-[0.1em]">
-              Phase 1 · Foundation &amp; authentication
+              Phase 2 · Queue management
             </span>
           </div>
         </footer>

@@ -76,7 +76,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
         <div className="mt-8 rounded-xl border border-dashed border-border/80 px-3.5 py-3">
           <p className="text-[0.6875rem] font-semibold text-foreground">Built in phases</p>
           <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted-foreground">
-            Queue creation, tokens and analytics are rolling out next. Your account is ready.
+            Queue management is live. Participants, service flow and analytics are rolling out next.
           </p>
         </div>
       </nav>
@@ -84,14 +84,14 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       <div className="shrink-0 p-3">
         <div className="rounded-xl border border-indigo-100/80 bg-gradient-to-br from-indigo-50/90 to-violet-50/50 p-3.5">
           <div className="flex items-center justify-between">
-            <p className="text-[0.6875rem] font-semibold text-foreground">Phase 1 of 7</p>
-            <span className="text-[0.625rem] font-semibold text-primary">14%</span>
+            <p className="text-[0.6875rem] font-semibold text-foreground">Phase 2 of 7</p>
+            <span className="text-[0.625rem] font-semibold text-primary">29%</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
-            <div className="h-full w-[14%] rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+            <div className="h-full w-[29%] rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
           </div>
           <p className="mt-2 text-[0.625rem] leading-relaxed text-muted-foreground">
-            Authentication and the data layer are live.
+            Manager-owned queues are live and ready to use.
           </p>
         </div>
       </div>

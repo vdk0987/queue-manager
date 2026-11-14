@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { useQueues } from "@/hooks/use-queues";
 import { useSystemHealth } from "@/hooks/use-system-health";
 import {
   cn,
@@ -44,7 +45,7 @@ const stats: Array<{
   phase: string;
   tone: "indigo" | "emerald" | "amber" | "violet";
 }> = [
-  { label: "Total queues", icon: ListOrdered, phase: "Phase 2", tone: "indigo" },
+  { label: "Total queues", icon: ListOrdered, phase: "Live", tone: "indigo" },
   { label: "Waiting now", icon: Users, phase: "Phase 3", tone: "emerald" },
   { label: "Served today", icon: BadgeCheck, phase: "Phase 4", tone: "amber" },
   { label: "Average wait", icon: Timer, phase: "Phase 5", tone: "violet" },
@@ -68,13 +69,13 @@ const phases = [
     number: 2,
     title: "Queue management",
     description: "Create, rename, activate and switch between multiple queues.",
-    status: "next" as const,
+    status: "complete" as const,
   },
   {
     number: 3,
     title: "Token management",
     description: "Participant registration, token generation, ordering and cancellation.",
-    status: "planned" as const,
+    status: "next" as const,
   },
   {
     number: 4,
@@ -105,6 +106,7 @@ const phases = [
 export function DashboardPage() {
   useDocumentTitle("Overview");
   const { manager } = useAuth();
+  const { queues, status: queueStatus } = useQueues();
 
   if (!manager) {
     return null;
@@ -112,6 +114,7 @@ export function DashboardPage() {
 
   const now = new Date();
   const firstName = getFirstName(manager.name);
+  const totalQueues = queueStatus === "ready" ? queues.length : null;
 
   return (
     <div className="space-y-6 sm:space-y-7">
@@ -126,22 +129,30 @@ export function DashboardPage() {
               {getGreeting(now)}, {firstName}.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Your workspace is secured and your data layer is connected. Queue operations arrive in
-              the next phase.
+              Your queues are live. Create a line, rename it, or pause it without losing its
+              history.
             </p>
           </div>
 
-          <Button variant="outline" asChild className="w-fit">
-            <a href="#roadmap">
-              <Rocket />
-              View roadmap
-            </a>
-          </Button>
+          <div className="flex w-fit flex-wrap items-center gap-2">
+            <Button asChild>
+              <Link to="/queues">
+                <ListOrdered />
+                Manage queues
+              </Link>
+            </Button>
+            <Button variant="outline" asChild className="w-fit">
+              <a href="#roadmap">
+                <Rocket />
+                View roadmap
+              </a>
+            </Button>
+          </div>
         </div>
       </header>
 
       <section
-        aria-label="Phase 1 status"
+        aria-label="Phase 2 status"
         className="relative animate-fade-up overflow-hidden rounded-2xl bg-[#131226] text-white shadow-lifted [animation-delay:60ms]"
       >
         <div
@@ -154,19 +165,19 @@ export function DashboardPage() {
           <div>
             <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
               <BadgeCheck />
-              Phase 1 complete
+              Phase 2 complete
             </Badge>
 
             <h2 className="mt-4 text-xl font-bold tracking-tight sm:text-2xl">
-              The foundation is live.
+              Your queue workspace is live.
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-indigo-100/65">
-              Secure manager accounts, authenticated routes and a persistent PostgreSQL layer are
-              running. Your workspace is ready for the queues to come.
+              Create and name multiple queues, switch between them, and pause a line without losing
+              its history. Every queue is private to your account.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {["Bcrypt password hashing", "HttpOnly sessions", "Ownership-ready routes"].map(
+              {["Manager-owned queues", "Rename & status control", "Ownership-scoped API"].map(
                 (feature) => (
                   <span
                     key={feature}
@@ -181,17 +192,17 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-5 lg:flex-col lg:items-end lg:gap-3">
-            <ProgressRing value={14} label="1 / 7" />
+            <ProgressRing value={29} label="2 / 7" />
             <div className="lg:text-right">
               <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white/40">
                 Next milestone
               </p>
-              <p className="mt-1 text-sm font-semibold text-white">Queue management</p>
+              <p className="mt-1 text-sm font-semibold text-white">Token management</p>
               <Link
                 to="/queues"
                 className="mt-1 inline-flex items-center text-xs font-medium text-indigo-200 underline-offset-4 hover:underline"
               >
-                Preview the workspace →
+                Manage your queues →
               </Link>
             </div>
           </div>
@@ -202,39 +213,52 @@ export function DashboardPage() {
         aria-label="Queue metrics"
         className="grid animate-fade-up grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4 [animation-delay:110ms]"
       >
-        {stats.map((stat) => (
-          <Card key={stat.label} className="group transition-shadow hover:shadow-lifted">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-[0.8125rem] font-medium text-muted-foreground">{stat.label}</p>
-                <span
-                  className={cn(
-                    "grid size-9 place-items-center rounded-xl ring-1",
-                    toneStyles[stat.tone],
-                  )}
-                >
-                  <stat.icon className="size-[1.125rem]" />
-                </span>
-              </div>
+        {stats.map((stat) => {
+          const isLive = stat.phase === "Live";
+          const value = stat.label === "Total queues" ? totalQueues : null;
 
-              <div className="mt-4 flex items-end justify-between gap-3">
-                <p
-                  className="font-display text-3xl font-bold tracking-tight text-foreground/35"
-                  aria-label="No data yet"
-                >
-                  —
+          return (
+            <Card key={stat.label} className="group transition-shadow hover:shadow-lifted">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[0.8125rem] font-medium text-muted-foreground">{stat.label}</p>
+                  <span
+                    className={cn(
+                      "grid size-9 place-items-center rounded-xl ring-1",
+                      toneStyles[stat.tone],
+                    )}
+                  >
+                    <stat.icon className="size-[1.125rem]" />
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-end justify-between gap-3">
+                  <p
+                    className={cn(
+                      "font-display text-3xl font-bold tracking-tight",
+                      value === null ? "text-foreground/35" : "text-foreground",
+                    )}
+                    aria-label={value === null ? "No data yet" : undefined}
+                  >
+                    {value === null ? "—" : value}
+                  </p>
+                  <Badge
+                    variant={isLive ? "success" : "outline"}
+                    className={cn("mb-0.5", !isLive && "bg-muted/40")}
+                  >
+                    {isLive ? <Activity /> : <LockKeyhole />}
+                    {stat.phase}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-[0.6875rem] text-muted-foreground">
+                  {isLive
+                    ? "Across active and inactive lines."
+                    : "Metrics will populate automatically."}
                 </p>
-                <Badge variant="outline" className="mb-0.5 bg-muted/40">
-                  <LockKeyhole />
-                  {stat.phase}
-                </Badge>
-              </div>
-              <p className="mt-2 text-[0.6875rem] text-muted-foreground">
-                Metrics will populate automatically.
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </section>
 
       <div className="grid animate-fade-up gap-4 xl:grid-cols-[1.08fr_0.92fr] [animation-delay:160ms]">
@@ -256,7 +280,7 @@ export function DashboardPage() {
             </CardDescription>
           </div>
           <Badge variant="success" className="shrink-0">
-            <CheckCircle2 />1 of 7 complete
+            <CheckCircle2 />2 of 7 complete
           </Badge>
         </CardHeader>
         <CardContent>
@@ -319,11 +343,11 @@ export function DashboardPage() {
           <div>
             <CardTitle>Recent activity</CardTitle>
             <CardDescription>
-              A clear audit trail of queue actions will appear here.
+              A clear audit trail of queue and token actions will appear here.
             </CardDescription>
           </div>
           <Badge variant="outline" className="shrink-0 bg-muted/40">
-            Phase 2
+            Phase 3
           </Badge>
         </CardHeader>
         <CardContent>

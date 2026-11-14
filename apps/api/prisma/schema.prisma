@@ -1,6 +1,7 @@
 // QueuePilot data model
 // Phase 1: manager identity + authentication.
-// Queue and token models are introduced in their respective phases.
+// Phase 2: manager-owned queues with an active/inactive lifecycle.
+// Token models are introduced in Phase 3.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,6 +12,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum QueueStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Manager {
   id           String   @id @default(uuid()) @db.Uuid
   name         String   @db.VarChar(120)
@@ -19,5 +25,22 @@ model Manager {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  queues Queue[]
+
   @@map("managers")
+}
+
+model Queue {
+  id     String      @id @default(uuid()) @db.Uuid
+  name   String      @db.VarChar(100)
+  status QueueStatus @default(ACTIVE)
+
+  managerId String @map("manager_id") @db.Uuid
+  manager   Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([managerId, createdAt])
+  @@map("queues")
 }

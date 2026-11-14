@@ -11,6 +11,8 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showClose
+        variant="sheet"
+        closeLabel="Close navigation"
         className="w-[300px] border-r border-border/80 p-0 data-[state=open]:animate-slide-in-left"
       >
         <DialogTitle className="sr-only">Navigation</DialogTitle>

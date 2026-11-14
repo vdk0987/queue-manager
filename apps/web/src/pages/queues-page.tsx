@@ -1,37 +1,73 @@
-import { ArrowLeft, Check, ListOrdered, Plus, Users } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Clock3,
+  ListOrdered,
+  PauseCircle,
+  Pencil,
+  PlayCircle,
+  Plus,
+  RefreshCw,
+  Users,
+} from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
+import { QueueFormDialog } from "@/components/queues/queue-form-dialog";
+import { QueueStatusBadge } from "@/components/queues/queue-status-badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-
-const features = [
-  "Create and name multiple queues",
-  "Activate, pause or archive a queue",
-  "See waiting counts and the active token at a glance",
-  "Switch between queues without losing your place",
-];
-
-const previewQueues = [
-  {
-    name: "Customer support",
-    waiting: 12,
-    serving: "Q001-012",
-    tone: "bg-indigo-50 text-indigo-600",
-  },
-  {
-    name: "Bill payments",
-    waiting: 5,
-    serving: "Q002-007",
-    tone: "bg-emerald-50 text-emerald-600",
-  },
-  { name: "New accounts", waiting: 3, serving: null, tone: "bg-amber-50 text-amber-600" },
-];
+import { useQueues } from "@/hooks/use-queues";
+import { getErrorMessage, queueApi } from "@/lib/api";
+import { cn, formatShortDate, pluralize } from "@/lib/utils";
+import type { Queue } from "@/types/queue";
 
 export function QueuesPage() {
   useDocumentTitle("Queues");
+
+  const { queues, status, error, refresh, addQueue, replaceQueue } = useQueues();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editQueue, setEditQueue] = useState<Queue | null>(null);
+  const [deactivateQueue, setDeactivateQueue] = useState<Queue | null>(null);
+  const [statusPendingId, setStatusPendingId] = useState<string | null>(null);
+
+  const activeCount = queues.filter((queue) => queue.status === "ACTIVE").length;
+  const inactiveCount = queues.length - activeCount;
+
+  function handleSaved(queue: Queue) {
+    if (editQueue) {
+      replaceQueue(queue);
+      setEditQueue(null);
+      return;
+    }
+
+    addQueue(queue);
+  }
+
+  async function changeStatus(queue: Queue, nextStatus: "ACTIVE" | "INACTIVE") {
+    setStatusPendingId(queue.id);
+
+    try {
+      const response = await queueApi.updateStatus(queue.id, nextStatus);
+      replaceQueue(response.data);
+      toast.success(
+        nextStatus === "ACTIVE"
+          ? `"${queue.name}" is accepting participants again.`
+          : `"${queue.name}" has been deactivated.`,
+      );
+      setDeactivateQueue(null);
+    } catch (requestError) {
+      toast.error(getErrorMessage(requestError));
+    } finally {
+      setStatusPendingId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -43,139 +79,313 @@ export function QueuesPage() {
           </>
         }
         title="Queues"
-        description="A single place to create, organise and run every line your team manages."
+        description="Create, organise and run every line your team manages from one place."
         actions={
-          <Button
-            onClick={() =>
-              toast.info("Queue creation arrives in Phase 2. Your account foundation is ready.")
-            }
-          >
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus />
-            New queue
-            <Badge
-              variant="secondary"
-              className="ml-1 bg-primary-foreground/15 text-primary-foreground"
-            >
-              Phase 2
-            </Badge>
+            Create queue
           </Button>
         }
       />
 
-      <div className="grid animate-fade-up gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card className="overflow-hidden">
-          <CardContent className="flex h-full flex-col p-6 sm:p-7">
-            <div className="grid size-11 place-items-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
-              <ListOrdered className="size-5" />
-            </div>
+      {status === "ready" && queues.length > 0 ? (
+        <section
+          aria-label="Queue summary"
+          className="grid animate-fade-up grid-cols-3 gap-3 [animation-delay:40ms]"
+        >
+          <SummaryTile label="Total queues" value={queues.length} tone="indigo" />
+          <SummaryTile label="Active" value={activeCount} tone="emerald" />
+          <SummaryTile label="Inactive" value={inactiveCount} tone="amber" />
+        </section>
+      ) : null}
 
-            <Badge variant="warning" className="mt-5 w-fit">
-              Planned for Phase 2
-            </Badge>
-
-            <h2 className="mt-3 font-display text-xl font-bold tracking-tight text-foreground">
-              Queue management is on the way.
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              The account layer is complete. Phase 2 adds the operational home for your queues —
-              creation, status control and a fast switch between every line.
+      <section className="animate-fade-up [animation-delay:90ms]" aria-live="polite">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Your queues</h2>
+            <p className="text-xs text-muted-foreground">
+              {status === "ready"
+                ? `${queues.length} ${pluralize(queues.length, "queue")} in this workspace`
+                : "Loading your workspace queues…"}
             </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={refresh}
+            disabled={status === "loading"}
+            aria-label="Refresh queues"
+          >
+            <RefreshCw className={cn(status === "loading" && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
 
-            <ul className="mt-5 space-y-2.5">
-              {features.map((feature) => (
-                <li key={feature} className="flex items-start gap-2.5 text-sm text-foreground/85">
-                  <span className="mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-                    <Check className="size-3" />
-                  </span>
-                  {feature}
-                </li>
-              ))}
-            </ul>
+        {status === "loading" ? <QueueListSkeleton /> : null}
 
-            <div className="mt-auto pt-7">
-              <Button variant="outline" asChild className="w-fit">
-                <Link to="/">
-                  <ArrowLeft />
-                  Back to overview
-                </Link>
+        {status === "error" ? (
+          <Card>
+            <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <Alert variant="destructive" className="border-0 bg-transparent p-0">
+                <AlertCircle />
+                <AlertDescription>{error ?? "We couldn't load your queues."}</AlertDescription>
+              </Alert>
+              <Button variant="outline" onClick={refresh} className="shrink-0">
+                <RefreshCw />
+                Try again
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : null}
 
-        <Card className="relative overflow-hidden bg-card">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.09),transparent_70%)]"
-          />
-          <CardContent className="relative p-5 sm:p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Workspace preview</p>
-                <p className="text-xs text-muted-foreground">How your queues will look</p>
-              </div>
-              <Badge variant="outline" className="bg-card">
-                Preview
-              </Badge>
-            </div>
+        {status === "ready" && queues.length === 0 ? (
+          <EmptyQueues onCreate={() => setCreateOpen(true)} />
+        ) : null}
 
-            <div
-              aria-hidden="true"
-              className="select-none rounded-2xl border border-border/80 bg-background/60 p-3"
-            >
-              <div className="mb-3 flex items-center justify-between rounded-xl border border-border/70 bg-card px-3.5 py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
-                    <ListOrdered className="size-3.5" />
-                  </span>
-                  <span className="text-xs font-semibold">All queues</span>
-                </div>
-                <span className="text-[0.625rem] font-medium text-muted-foreground">
-                  3 queues · 20 waiting
-                </span>
-              </div>
+        {status === "ready" && queues.length > 0 ? (
+          <ul aria-label="Queues" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {queues.map((queue) => (
+              <li key={queue.id}>
+                <QueueCard
+                  queue={queue}
+                  busy={statusPendingId === queue.id}
+                  onEdit={() => setEditQueue(queue)}
+                  onDeactivate={() => setDeactivateQueue(queue)}
+                  onActivate={() => void changeStatus(queue, "ACTIVE")}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
-              <div className="space-y-2">
-                {previewQueues.map((queue) => (
-                  <div
-                    key={queue.name}
-                    className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3.5 py-3 shadow-xs"
-                  >
-                    <span
-                      className={`grid size-8 shrink-0 place-items-center rounded-lg ${queue.tone}`}
-                    >
-                      <Users className="size-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-foreground">{queue.name}</p>
-                      <p className="mt-0.5 truncate text-[0.625rem] text-muted-foreground">
-                        {queue.serving ? (
-                          <>
-                            Serving{" "}
-                            <span className="font-semibold text-foreground">{queue.serving}</span>
-                            {" · "}
-                            {queue.waiting} waiting
-                          </>
-                        ) : (
-                          <>Idle · {queue.waiting} waiting</>
-                        )}
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.08em] text-emerald-700">
-                      <span className="size-1 rounded-full bg-emerald-500" />
-                      Active
-                    </span>
-                  </div>
-                ))}
-              </div>
+      <QueueFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        mode="create"
+        onSaved={handleSaved}
+      />
 
-              <div className="mt-3 rounded-xl border border-dashed border-border bg-card/50 px-3.5 py-3 text-center text-[0.625rem] text-muted-foreground">
-                Illustrative interface · connects in Phase 2
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <QueueFormDialog
+        open={editQueue !== null}
+        onOpenChange={(open) => !open && setEditQueue(null)}
+        mode="edit"
+        queue={editQueue ?? undefined}
+        onSaved={handleSaved}
+      />
+
+      <ConfirmDialog
+        open={deactivateQueue !== null}
+        onOpenChange={(open) => !open && setDeactivateQueue(null)}
+        title="Deactivate this queue?"
+        description={
+          deactivateQueue ? (
+            <>
+              <span className="font-semibold text-foreground">{deactivateQueue.name}</span> will
+              stop accepting new participants until you activate it again. Existing history and
+              queue settings are preserved.
+            </>
+          ) : null
+        }
+        confirmLabel="Deactivate queue"
+        variant="destructive"
+        loading={deactivateQueue !== null && statusPendingId === deactivateQueue.id}
+        onConfirm={() => {
+          if (deactivateQueue) void changeStatus(deactivateQueue, "INACTIVE");
+        }}
+      />
     </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "indigo" | "emerald" | "amber";
+}) {
+  const tones = {
+    indigo: "bg-indigo-50 text-indigo-600 ring-indigo-100",
+    emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    amber: "bg-amber-50 text-amber-600 ring-amber-100",
+  } as const;
+
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-2.5 p-3 sm:p-4">
+        <span
+          className={cn(
+            "hidden size-9 shrink-0 place-items-center rounded-xl ring-1 sm:grid",
+            tones[tone],
+          )}
+        >
+          <ListOrdered className="size-[1.125rem]" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="font-display text-xl font-bold leading-tight text-foreground">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QueueCard({
+  queue,
+  busy,
+  onEdit,
+  onDeactivate,
+  onActivate,
+}: {
+  queue: Queue;
+  busy: boolean;
+  onEdit: () => void;
+  onDeactivate: () => void;
+  onActivate: () => void;
+}) {
+  const isActive = queue.status === "ACTIVE";
+
+  return (
+    <Card
+      className={cn(
+        "flex h-full flex-col transition-shadow hover:shadow-lifted",
+        !isActive && "border-amber-200/80 bg-amber-50/25",
+      )}
+    >
+      <CardContent className="flex flex-1 flex-col p-5">
+        <div className="flex items-start gap-3">
+          <span
+            className={cn(
+              "grid size-10 shrink-0 place-items-center rounded-xl ring-1",
+              isActive
+                ? "bg-indigo-50 text-indigo-600 ring-indigo-100"
+                : "bg-amber-100/70 text-amber-700 ring-amber-200/70",
+            )}
+          >
+            <ListOrdered className="size-[1.125rem]" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <Link
+              to={`/queues/${queue.id}`}
+              className="block truncate text-sm font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:rounded focus-visible:ring-4 focus-visible:ring-ring/15 focus-visible:outline-none"
+            >
+              {queue.name}
+            </Link>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.6875rem] text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <Clock3 className="size-3" />
+                Created {formatShortDate(queue.createdAt)}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="inline-flex items-center gap-1">
+                <Users className="size-3" />
+                {queue.waitingCount} waiting
+              </span>
+            </p>
+          </div>
+
+          <QueueStatusBadge status={queue.status} />
+        </div>
+
+        {!isActive ? (
+          <p className="mt-3 rounded-lg border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-[0.6875rem] leading-relaxed text-amber-800">
+            This queue is paused and won&apos;t accept new participants.
+          </p>
+        ) : null}
+
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-5">
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/queues/${queue.id}`}>
+              Open
+              <ArrowRight />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onEdit} disabled={busy}>
+            <Pencil />
+            Edit
+          </Button>
+
+          <span className="ml-auto">
+            {isActive ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDeactivate}
+                disabled={busy}
+                className="text-destructive hover:bg-destructive/8 hover:text-destructive"
+              >
+                {busy ? <Spinner label="Deactivating queue" /> : <PauseCircle />}
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onActivate}
+                disabled={busy}
+                className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+              >
+                {busy ? <Spinner label="Activating queue" /> : <PlayCircle />}
+                Activate
+              </Button>
+            )}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QueueListSkeleton() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Card key={index}>
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <Skeleton className="size-10 rounded-xl" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <div className="mt-5 flex gap-2">
+              <Skeleton className="h-8 w-20 rounded-md" />
+              <Skeleton className="h-8 w-16 rounded-md" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function EmptyQueues({ onCreate }: { onCreate: () => void }) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center px-6 py-14 text-center">
+        <div className="grid size-14 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
+          <ListOrdered className="size-6" />
+        </div>
+        <h3 className="mt-5 font-display text-lg font-bold tracking-tight text-foreground">
+          No queues yet
+        </h3>
+        <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+          Create your first queue to start organising the people your team serves. You can add more
+          lines at any time.
+        </p>
+        <Button onClick={onCreate} className="mt-6">
+          <Plus />
+          Create your first queue
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

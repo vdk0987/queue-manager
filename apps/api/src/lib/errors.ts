@@ -4,6 +4,7 @@ export type ErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "NOT_FOUND"
+  | "QUEUE_NOT_FOUND"
   | "EMAIL_TAKEN"
   | "INVALID_CREDENTIALS"
   | "RATE_LIMITED"

@@ -5,6 +5,13 @@ import type {
   Manager,
   RegisterInput,
 } from "@/types/auth";
+import type {
+  CreateQueueInput,
+  Queue,
+  QueueApiResponse,
+  QueueStatus,
+  UpdateQueueInput,
+} from "@/types/queue";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 
@@ -114,6 +121,42 @@ export const authApi = {
 export const systemApi = {
   health(signal?: AbortSignal): Promise<HealthResponse> {
     return apiRequest<HealthResponse>("/api/health", { signal });
+  },
+};
+
+export const queueApi = {
+  list(signal?: AbortSignal): Promise<QueueApiResponse<Queue[]>> {
+    return apiRequest<QueueApiResponse<Queue[]>>("/api/queues", { signal });
+  },
+
+  get(queueId: string, signal?: AbortSignal): Promise<QueueApiResponse<Queue>> {
+    return apiRequest<QueueApiResponse<Queue>>(`/api/queues/${encodeURIComponent(queueId)}`, {
+      signal,
+    });
+  },
+
+  create(input: CreateQueueInput): Promise<QueueApiResponse<Queue>> {
+    return apiRequest<QueueApiResponse<Queue>>("/api/queues", {
+      method: "POST",
+      body: input,
+    });
+  },
+
+  rename(queueId: string, input: UpdateQueueInput): Promise<QueueApiResponse<Queue>> {
+    return apiRequest<QueueApiResponse<Queue>>(`/api/queues/${encodeURIComponent(queueId)}`, {
+      method: "PATCH",
+      body: input,
+    });
+  },
+
+  updateStatus(queueId: string, status: QueueStatus): Promise<QueueApiResponse<Queue>> {
+    return apiRequest<QueueApiResponse<Queue>>(
+      `/api/queues/${encodeURIComponent(queueId)}/status`,
+      {
+        method: "PATCH",
+        body: { status },
+      },
+    );
   },
 };
 
