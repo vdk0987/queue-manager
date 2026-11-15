@@ -1,6 +1,7 @@
 import { Prisma, type QueueStatus, type TokenStatus } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { QUEUE_EVENT, recordQueueActivity } from "../analytics/queue-activity.service.js";
 import { publicQueueSelect, toQueueResponse } from "../queues/queue.types.js";
 import type { CreateTokenInput, QueueHistoryQuery, QueueTokenQuery } from "./token.schemas.js";
 import {
@@ -248,6 +249,13 @@ export async function registerToken(
       select: publicTokenSelect,
     });
 
+    await recordQueueActivity(tx, {
+      queueId: queue.id,
+      tokenId: token.id,
+      eventType: QUEUE_EVENT.TOKEN_CREATED,
+      metadata: { tokenNumber, position },
+    });
+
     return toTokenResponse(token);
   });
 }
@@ -362,6 +370,17 @@ export async function reorderToken(
       data: { position: neighbour.position },
     });
 
+    await recordQueueActivity(tx, {
+      queueId: token.queueId,
+      tokenId: token.id,
+      eventType: QUEUE_EVENT.TOKEN_REORDERED,
+      metadata: {
+        direction,
+        fromPosition: token.position,
+        toPosition: neighbour.position,
+      },
+    });
+
     const updated = await tx.token.findUnique({
       where: { id: token.id },
       select: publicTokenSelect,
@@ -410,6 +429,13 @@ export async function cancelToken(
       select: publicTokenSelect,
     });
 
+    await recordQueueActivity(tx, {
+      queueId: token.queueId,
+      tokenId: token.id,
+      eventType: QUEUE_EVENT.TOKEN_CANCELLED,
+      metadata: { previousPosition: token.position },
+    });
+
     // Renumber the remaining line from 1..n.
     await normalizeWaitingPositions(tx, token.queueId);
 
@@ -452,7 +478,7 @@ export async function nextToken(managerId: string, queueId: string): Promise<Tok
 
     const next = await tx.token.findFirst({
       where: { queueId: queue.id, status: "WAITING" },
-      select: { id: true },
+      select: { id: true, position: true },
       orderBy: [{ position: "asc" }, { id: "asc" }],
     });
 
@@ -468,6 +494,13 @@ export async function nextToken(managerId: string, queueId: string): Promise<Tok
         serviceStartedAt: new Date(),
       },
       select: publicTokenSelect,
+    });
+
+    await recordQueueActivity(tx, {
+      queueId: queue.id,
+      tokenId: next.id,
+      eventType: QUEUE_EVENT.SERVICE_STARTED,
+      metadata: { previousPosition: next.position },
     });
 
     // The assigned token leaves the line, so close the gap it left behind.
@@ -526,6 +559,12 @@ export async function completeToken(managerId: string, tokenId: string): Promise
         serviceCompletedAt: new Date(),
       },
       select: publicTokenSelect,
+    });
+
+    await recordQueueActivity(tx, {
+      queueId,
+      tokenId: token.id,
+      eventType: QUEUE_EVENT.SERVICE_COMPLETED,
     });
 
     return toTokenResponse(completed);

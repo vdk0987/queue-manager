@@ -34,6 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useQueueTokens } from "@/hooks/use-queue-tokens";
+import { useQueueRealtime } from "@/hooks/use-queue-realtime";
 import { getErrorMessage, queueApi, tokenApi } from "@/lib/api";
 import { cn, formatDurationSeconds, formatShortDate } from "@/lib/utils";
 import type { Queue } from "@/types/queue";
@@ -54,6 +55,8 @@ export function QueueDetailsPage() {
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const queue = data?.queue ?? null;
+
+  useQueueRealtime(id, refresh);
 
   useDocumentTitle(queue?.name ?? "Queue details");
 

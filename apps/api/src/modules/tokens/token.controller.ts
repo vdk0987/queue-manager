@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { getAuthenticatedManager } from "../../middleware/auth.js";
+import { emitQueueEvent } from "../../realtime.js";
 import type { CreateTokenInput, ReorderTokenInput } from "./token.schemas.js";
 import { queueHistoryQuerySchema, queueTokenQuerySchema } from "./token.schemas.js";
 import {
@@ -53,6 +54,7 @@ function readHistoryQuery(req: Request) {
 export async function registerTokenHandler(req: Request, res: Response): Promise<void> {
   const manager = getAuthenticatedManager(req);
   const token = await registerToken(manager.id, readParam(req, "id"), req.body as CreateTokenInput);
+  emitQueueEvent("token:created", { queueId: token.queueId, token }, manager.id);
 
   res.status(201).json({ success: true, data: token });
 }
@@ -75,6 +77,11 @@ export async function reorderTokenHandler(req: Request, res: Response): Promise<
   const manager = getAuthenticatedManager(req);
   const { direction } = req.body as ReorderTokenInput;
   const result = await reorderToken(manager.id, readParam(req, "id"), direction);
+  emitQueueEvent(
+    "token:reordered",
+    { queueId: result.token.queueId, token: result.token },
+    manager.id,
+  );
 
   res.status(200).json({ success: true, data: result });
 }
@@ -82,6 +89,11 @@ export async function reorderTokenHandler(req: Request, res: Response): Promise<
 export async function cancelTokenHandler(req: Request, res: Response): Promise<void> {
   const manager = getAuthenticatedManager(req);
   const result = await cancelToken(manager.id, readParam(req, "id"));
+  emitQueueEvent(
+    "token:cancelled",
+    { queueId: result.token.queueId, token: result.token },
+    manager.id,
+  );
 
   res.status(200).json({
     success: true,
@@ -93,6 +105,7 @@ export async function cancelTokenHandler(req: Request, res: Response): Promise<v
 export async function nextTokenHandler(req: Request, res: Response): Promise<void> {
   const manager = getAuthenticatedManager(req);
   const token = await nextToken(manager.id, readParam(req, "id"));
+  emitQueueEvent("service:started", { queueId: token.queueId, token }, manager.id);
 
   res.status(200).json({ success: true, data: token });
 }
@@ -107,6 +120,7 @@ export async function getCurrentTokenHandler(req: Request, res: Response): Promi
 export async function completeTokenHandler(req: Request, res: Response): Promise<void> {
   const manager = getAuthenticatedManager(req);
   const token = await completeToken(manager.id, readParam(req, "id"));
+  emitQueueEvent("service:completed", { queueId: token.queueId, token }, manager.id);
 
   res.status(200).json({
     success: true,

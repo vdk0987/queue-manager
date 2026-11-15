@@ -9,6 +9,7 @@ import { errorHandler } from "./middleware/error-handler.js";
 import { notFoundHandler } from "./middleware/not-found.js";
 import { originGuard } from "./middleware/origin-guard.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
 import { queueRouter } from "./modules/queues/queue.routes.js";
 import { tokenRouter } from "./modules/tokens/token.routes.js";
@@ -55,6 +56,7 @@ app.get("/", (_req, res) => {
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/analytics", analyticsRouter);
 app.use("/api/queues", queueRouter);
 app.use("/api/tokens", tokenRouter);
 app.use(notFoundHandler);

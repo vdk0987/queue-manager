@@ -3,6 +3,7 @@
 // Phase 2: manager-owned queues with an active/inactive lifecycle.
 // Phase 3: participants, tokens, waiting positions, reordering and cancellation.
 // Phase 4: the WAITING -> IN_SERVICE -> COMPLETED service workflow.
+// Phase 5: immutable queue activity events for historical analytics.
 
 generator client {
   provider = "prisma-client-js"
@@ -50,10 +51,17 @@ model Queue {
    */
   nextTokenNumber Int @default(1) @map("next_token_number")
 
+  /**
+   * IANA timezone used for analytics date grouping (e.g. "Europe/London").
+   * Timestamps are stored in UTC and converted to this zone for day boundaries.
+   */
+  timezone String @default("UTC") @db.VarChar(64)
+
   managerId String @map("manager_id") @db.Uuid
   manager   Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
 
-  tokens Token[]
+  tokens     Token[]
+  activities QueueActivity[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -91,4 +99,30 @@ model Token {
   @@index([queueId, status])
   @@index([queueId, createdAt])
   @@map("tokens")
+}
+
+/**
+ * Append-only history of queue mutations. Token statuses describe the present;
+ * these events preserve the past (queue length over time, demand and outcomes).
+ *
+ * eventType is stored as text so new analytics events can be added without a
+ * database migration. Waiting-count deltas live in queue-activity.service.ts.
+ */
+model QueueActivity {
+  id String @id @default(uuid()) @db.Uuid
+
+  queueId String @map("queue_id") @db.Uuid
+  queue   Queue  @relation(fields: [queueId], references: [id], onDelete: Cascade)
+
+  tokenId String? @map("token_id") @db.Uuid
+
+  eventType String @map("event_type") @db.VarChar(40)
+  metadata  Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([queueId, createdAt])
+  @@index([queueId, eventType])
+  @@index([tokenId])
+  @@map("queue_activities")
 }

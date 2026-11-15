@@ -6,6 +6,7 @@ export const publicQueueSelect = {
   name: true,
   code: true,
   status: true,
+  timezone: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -22,6 +23,7 @@ export interface PublicQueue {
   name: string;
   code: string;
   status: QueueStatus;
+  timezone: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +45,7 @@ export function toQueueResponse(queue: CountedQueue): QueueResponse {
     name: queue.name,
     code: queue.code,
     status: queue.status,
+    timezone: queue.timezone,
     createdAt: queue.createdAt,
     updatedAt: queue.updatedAt,
     waitingCount: queue._count.tokens,

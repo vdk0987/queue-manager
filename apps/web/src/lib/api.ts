@@ -23,6 +23,7 @@ import type {
   TokenApiResponse,
   TokenFilterStatus,
 } from "@/types/token";
+import type { AnalyticsDashboard } from "@/types/analytics";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 
@@ -132,6 +133,24 @@ export const authApi = {
 export const systemApi = {
   health(signal?: AbortSignal): Promise<HealthResponse> {
     return apiRequest<HealthResponse>("/api/health", { signal });
+  },
+};
+
+export const analyticsApi = {
+  dashboard(
+    options: {
+      range?: "today" | "7d" | "30d" | "90d" | "all";
+      queueId?: string;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<{ success: true; data: AnalyticsDashboard }> {
+    const query = new URLSearchParams({ range: options.range ?? "7d" });
+    if (options.queueId) query.set("queueId", options.queueId);
+
+    return apiRequest<{ success: true; data: AnalyticsDashboard }>(
+      `/api/analytics/dashboard?${query.toString()}`,
+      { signal: options.signal },
+    );
   },
 };
 

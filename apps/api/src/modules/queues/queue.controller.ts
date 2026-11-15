@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../lib/errors.js";
 import { getAuthenticatedManager } from "../../middleware/auth.js";
+import { emitQueueEvent } from "../../realtime.js";
 import type {
   CreateQueueInput,
   UpdateQueueInput,
@@ -43,6 +44,7 @@ export async function getQueueHandler(req: Request, res: Response): Promise<void
 export async function updateQueueHandler(req: Request, res: Response): Promise<void> {
   const manager = getAuthenticatedManager(req);
   const queue = await renameQueue(manager.id, readQueueId(req), req.body as UpdateQueueInput);
+  emitQueueEvent("queue:updated", { queueId: queue.id, queue }, manager.id);
 
   res.status(200).json({ success: true, data: queue });
 }
@@ -54,6 +56,7 @@ export async function updateQueueStatusHandler(req: Request, res: Response): Pro
     readQueueId(req),
     req.body as UpdateQueueStatusInput,
   );
+  emitQueueEvent("queue:updated", { queueId: queue.id, queue }, manager.id);
 
   res.status(200).json({ success: true, data: queue });
 }

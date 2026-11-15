@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type QueueStatus } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { QUEUE_EVENT, recordQueueActivity } from "../analytics/queue-activity.service.js";
 import type {
   CreateQueueInput,
   UpdateQueueInput,
@@ -131,24 +132,63 @@ export async function setQueueStatus(
   queueId: string,
   input: UpdateQueueStatusInput,
 ): Promise<QueueResponse> {
-  if (input.status === "INACTIVE") {
-    // A participant currently being served must not be stranded by deactivation.
-    // Waiting tokens are preserved and simply resume when the queue is activated.
-    const inServiceCount = await prisma.token.count({
-      where: {
-        status: "IN_SERVICE",
-        queue: { id: queueId, managerId },
-      },
+  return prisma.$transaction(async (tx) => {
+    // Lock first so a concurrent Next Token cannot start a service while the
+    // queue is being deactivated, and so repeated clicks become no-ops.
+    const rows = await tx.$queryRaw<Array<{ id: string; status: QueueStatus }>>`
+      SELECT id, status
+      FROM queues
+      WHERE id = ${queueId}::uuid AND manager_id = ${managerId}::uuid
+      FOR UPDATE
+    `;
+
+    const existing = rows[0];
+
+    if (!existing) {
+      throw queueNotFound();
+    }
+
+    if (existing.status === input.status) {
+      const unchanged = await tx.queue.findUnique({
+        where: { id: queueId },
+        select: publicQueueSelect,
+      });
+
+      if (!unchanged) {
+        throw queueNotFound();
+      }
+
+      return toQueueResponse(unchanged);
+    }
+
+    if (input.status === "INACTIVE") {
+      // A participant currently being served must not be stranded by deactivation.
+      // Waiting tokens are preserved and simply resume when the queue is activated.
+      const inServiceCount = await tx.token.count({
+        where: { queueId, status: "IN_SERVICE" },
+      });
+
+      if (inServiceCount > 0) {
+        throw new AppError(
+          409,
+          "QUEUE_IN_SERVICE",
+          "Finish or cancel the token currently in service before deactivating this queue.",
+        );
+      }
+    }
+
+    const updated = await tx.queue.update({
+      where: { id: queueId },
+      data: { status: input.status },
+      select: publicQueueSelect,
     });
 
-    if (inServiceCount > 0) {
-      throw new AppError(
-        409,
-        "QUEUE_IN_SERVICE",
-        "Finish or cancel the token currently in service before deactivating this queue.",
-      );
-    }
-  }
+    await recordQueueActivity(tx, {
+      queueId,
+      eventType:
+        input.status === "ACTIVE" ? QUEUE_EVENT.QUEUE_ACTIVATED : QUEUE_EVENT.QUEUE_DEACTIVATED,
+    });
 
-  return updateOwnedQueue(managerId, queueId, { status: input.status });
+    return toQueueResponse(updated);
+  });
 }
