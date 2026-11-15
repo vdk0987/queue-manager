@@ -6,90 +6,53 @@ import {
   Clock3,
   Hash,
   ListOrdered,
-  LockKeyhole,
   PauseCircle,
   Pencil,
   PlayCircle,
   RefreshCw,
   SearchX,
-  UserCheck,
+  Ticket,
   UserPlus,
-  Users,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
 import { QueueFormDialog } from "@/components/queues/queue-form-dialog";
 import { QueueStatusBadge } from "@/components/queues/queue-status-badge";
+import { AddParticipantDialog } from "@/components/tokens/add-participant-dialog";
+import { CurrentlyServingCard } from "@/components/tokens/currently-serving-card";
+import { QueueStatsGrid } from "@/components/tokens/queue-stats";
+import { WaitingQueue } from "@/components/tokens/waiting-queue";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-import { ApiError, getErrorMessage, queueApi } from "@/lib/api";
+import { useQueueTokens } from "@/hooks/use-queue-tokens";
+import { getErrorMessage, queueApi, tokenApi } from "@/lib/api";
 import { cn, formatShortDate } from "@/lib/utils";
 import type { Queue } from "@/types/queue";
-
-type PageStatus = "loading" | "ready" | "not-found" | "invalid" | "error";
+import type { Token } from "@/types/token";
 
 export function QueueDetailsPage() {
   const { id } = useParams<{ id: string }>();
-  const [queue, setQueue] = useState<Queue | null>(null);
-  const [status, setStatus] = useState<PageStatus>("loading");
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const { data, status, error, refresh, update } = useQueueTokens(id);
+
   const [editOpen, setEditOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [statusPending, setStatusPending] = useState(false);
+  const [pendingTokenId, setPendingTokenId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Token | null>(null);
+  const [cancelPending, setCancelPending] = useState(false);
 
-  useDocumentTitle(status === "ready" && queue ? queue.name : "Queue details");
+  const queue = data?.queue ?? null;
 
-  useEffect(() => {
-    if (!id) {
-      setStatus("not-found");
-      return;
-    }
-
-    const controller = new AbortController();
-
-    setQueue(null);
-    setStatus("loading");
-    setError(null);
-
-    queueApi
-      .get(id, controller.signal)
-      .then(({ data }) => {
-        if (controller.signal.aborted) return;
-        setQueue(data);
-        setStatus("ready");
-      })
-      .catch((requestError: unknown) => {
-        if (controller.signal.aborted) return;
-        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-
-        if (requestError instanceof ApiError) {
-          if (requestError.status === 404 || requestError.code === "QUEUE_NOT_FOUND") {
-            setStatus("not-found");
-            return;
-          }
-
-          if (requestError.status === 400) {
-            setStatus("invalid");
-            return;
-          }
-        }
-
-        setError(getErrorMessage(requestError));
-        setStatus("error");
-      });
-
-    return () => controller.abort();
-  }, [id, reloadKey]);
+  useDocumentTitle(queue?.name ?? "Queue details");
 
   async function changeStatus(nextStatus: "ACTIVE" | "INACTIVE") {
     if (!queue) return;
@@ -98,17 +61,80 @@ export function QueueDetailsPage() {
 
     try {
       const response = await queueApi.updateStatus(queue.id, nextStatus);
-      setQueue(response.data);
+      update((current) => ({ ...current, queue: response.data }));
       toast.success(
         nextStatus === "ACTIVE"
           ? "Queue activated. It can accept participants again."
-          : "Queue deactivated. Existing history is preserved.",
+          : "Queue deactivated. Existing participants and history are preserved.",
       );
       setDeactivateOpen(false);
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
     } finally {
       setStatusPending(false);
+    }
+  }
+
+  function handleQueueSaved(updatedQueue: Queue) {
+    update((current) => ({ ...current, queue: updatedQueue }));
+  }
+
+  async function handleMove(token: Token, direction: "UP" | "DOWN") {
+    if (pendingTokenId) return;
+
+    setPendingTokenId(token.id);
+
+    try {
+      const response = await tokenApi.reorder(token.id, { direction });
+      const moved = response.data.token;
+      const waiting = response.data.waiting;
+
+      update((current) => ({
+        ...current,
+        waiting,
+        waitingCount: waiting.length,
+        tokens: current.tokens.map((item) => (item.id === moved.id ? moved : item)),
+      }));
+
+      toast.success(
+        direction === "UP"
+          ? `${moved.displayToken} moved up to position ${moved.position}.`
+          : `${moved.displayToken} moved down to position ${moved.position}.`,
+      );
+    } catch (requestError) {
+      toast.error(getErrorMessage(requestError));
+      refresh();
+    } finally {
+      setPendingTokenId(null);
+    }
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+
+    setCancelPending(true);
+
+    try {
+      const response = await tokenApi.cancel(cancelTarget.id);
+      const { token, waiting, waitingCount, stats } = response.data;
+
+      update((current) => ({
+        ...current,
+        waiting,
+        waitingCount,
+        stats,
+        queue: { ...current.queue, waitingCount },
+        tokens: current.tokens.map((item) => (item.id === token.id ? token : item)),
+      }));
+
+      toast.success(`${token.displayToken} cancelled. The record is preserved for history.`);
+      setCancelTarget(null);
+    } catch (requestError) {
+      toast.error(getErrorMessage(requestError));
+      setCancelTarget(null);
+      refresh();
+    } finally {
+      setCancelPending(false);
     }
   }
 
@@ -135,32 +161,41 @@ export function QueueDetailsPage() {
       ) : null}
 
       {status === "error" ? (
-        <Card>
-          <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <Alert variant="destructive" className="border-0 bg-transparent p-0">
-              <AlertCircle />
-              <AlertDescription>{error ?? "We couldn't load this queue."}</AlertDescription>
-            </Alert>
-            <Button
-              variant="outline"
-              onClick={() => setReloadKey((key) => key + 1)}
-              className="shrink-0"
-            >
+        <StateCard
+          icon={AlertCircle}
+          title="We couldn't load this queue"
+          description={error ?? "Check your connection and try again."}
+          action={
+            <Button onClick={refresh}>
               <RefreshCw />
               Try again
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       ) : null}
 
-      {status === "ready" && queue ? (
+      {status === "ready" && data && queue ? (
         <>
           {queue.status === "INACTIVE" ? (
             <Alert variant="default" className="border-amber-200 bg-amber-50/70 text-amber-900">
               <PauseCircle className="text-amber-600" />
               <AlertDescription>
                 <span className="font-semibold">This queue is inactive.</span> New participants
-                can&apos;t be added until you activate it again. Existing history is preserved.
+                can&apos;t be added until you activate it again. The current waiting list and its
+                positions are preserved.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {error ? (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                <span>{error} The last loaded queue state is still shown.</span>
+                <Button variant="outline" size="sm" onClick={refresh}>
+                  <RefreshCw />
+                  Refresh
+                </Button>
               </AlertDescription>
             </Alert>
           ) : null}
@@ -174,13 +209,25 @@ export function QueueDetailsPage() {
                     queue.status === "ACTIVE" ? "bg-emerald-500" : "bg-amber-500",
                   )}
                 />
-                Queue details
+                Queue details · {queue.code}
               </>
             }
             title={queue.name}
-            description={`Created ${formatShortDate(queue.createdAt)} · ${queue.waitingCount} waiting · Last updated ${formatShortDate(queue.updatedAt)}`}
+            description={`Created ${formatShortDate(queue.createdAt)} · ${data.stats.totalGenerated} tokens generated · Last updated ${formatShortDate(queue.updatedAt)}`}
             actions={
-              <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={() => setAddOpen(true)}
+                  disabled={queue.status !== "ACTIVE"}
+                  title={
+                    queue.status !== "ACTIVE"
+                      ? "Activate this queue to add participants."
+                      : undefined
+                  }
+                >
+                  <UserPlus />
+                  Add participant
+                </Button>
                 <Button variant="outline" onClick={() => setEditOpen(true)}>
                   <Pencil />
                   Edit
@@ -200,118 +247,113 @@ export function QueueDetailsPage() {
                     Activate
                   </Button>
                 )}
-              </>
+              </div>
             }
           />
 
-          <div className="grid animate-fade-up gap-4 xl:grid-cols-[1.3fr_0.7fr] [animation-delay:60ms]">
+          <QueueStatsGrid stats={data.stats} />
+
+          <div className="grid animate-fade-up gap-4 xl:grid-cols-[1.35fr_0.65fr] [animation-delay:60ms]">
             <div className="space-y-4">
-              <Card>
-                <CardHeader className="flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Currently serving</CardTitle>
-                    <CardDescription>The token your team is serving right now.</CardDescription>
-                  </div>
-                  <Badge variant="outline" className="shrink-0 bg-muted/40">
-                    <LockKeyhole />
-                    Phase 3
-                  </Badge>
+              <CurrentlyServingCard token={data.currentlyServing} />
+
+              <WaitingQueue
+                queue={queue}
+                waiting={data.waiting}
+                pendingTokenId={pendingTokenId}
+                onMoveUp={(token) => void handleMove(token, "UP")}
+                onMoveDown={(token) => void handleMove(token, "DOWN")}
+                onCancel={setCancelTarget}
+                onAddParticipant={() => setAddOpen(true)}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <Card className="h-fit">
+                <CardHeader>
+                  <CardTitle>Queue information</CardTitle>
+                  <CardDescription>Reference details for this line.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/90 bg-muted/20 px-6 py-10 text-center">
-                    <div className="grid size-11 place-items-center rounded-xl bg-card text-muted-foreground shadow-sm ring-1 ring-border/60">
-                      <UserCheck className="size-5" />
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-foreground">
-                      No one is being served
-                    </p>
-                    <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                      The active token and service timer will appear here when token management
-                      arrives in Phase 3.
-                    </p>
-                  </div>
+                  <dl className="space-y-3.5 text-sm">
+                    <DetailRow label="Status">
+                      <QueueStatusBadge status={queue.status} />
+                    </DetailRow>
+                    <DetailRow label="Queue code">
+                      <code className="rounded bg-muted/70 px-1.5 py-0.5 font-mono text-xs text-foreground">
+                        {queue.code}
+                      </code>
+                    </DetailRow>
+                    <DetailRow label="Waiting now">
+                      <span className="font-medium text-foreground">{data.stats.waitingCount}</span>
+                    </DetailRow>
+                    <DetailRow label="Total tokens">
+                      <span className="font-medium text-foreground">
+                        {data.stats.totalGenerated}
+                      </span>
+                    </DetailRow>
+                    <DetailRow label="Created">
+                      <span className="inline-flex items-center gap-1.5 text-foreground">
+                        <CalendarDays className="size-3.5 text-muted-foreground" />
+                        {formatShortDate(queue.createdAt)}
+                      </span>
+                    </DetailRow>
+                    <DetailRow label="Last updated">
+                      <span className="inline-flex items-center gap-1.5 text-foreground">
+                        <Clock3 className="size-3.5 text-muted-foreground" />
+                        {formatShortDate(queue.updatedAt)}
+                      </span>
+                    </DetailRow>
+                    <DetailRow label="Queue ID">
+                      <code className="block break-all font-mono text-xs text-muted-foreground">
+                        {queue.id}
+                      </code>
+                    </DetailRow>
+                  </dl>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Waiting queue</CardTitle>
-                    <CardDescription>Participants waiting for their turn.</CardDescription>
-                  </div>
-                  <Badge variant="outline" className="shrink-0 bg-card">
-                    <Users />
-                    {queue.waitingCount} waiting
-                  </Badge>
+              <Card className="h-fit border-indigo-100/80 bg-indigo-50/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Ticket className="size-4 text-indigo-600" />
+                    Token numbering
+                  </CardTitle>
+                  <CardDescription>
+                    Numbers stay permanent even when the line changes.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/90 bg-muted/20 px-6 py-10 text-center">
-                    <div className="grid size-11 place-items-center rounded-xl bg-card text-muted-foreground shadow-sm ring-1 ring-border/60">
-                      <Users className="size-5" />
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-foreground">The line is empty</p>
-                    <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                      Waiting participants will appear here once token management ships in Phase 3.
-                    </p>
-
-                    <Button
-                      variant="outline"
-                      disabled
-                      className="mt-5"
-                      aria-label="Add participant — available in Phase 3"
-                    >
-                      <UserPlus />
-                      Add participant
-                      <Badge variant="secondary" className="ml-1">
-                        Phase 3
-                      </Badge>
-                    </Button>
-                  </div>
+                <CardContent className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+                  <p className="rounded-lg border border-indigo-100 bg-card px-3 py-2 font-mono text-sm font-semibold text-indigo-700">
+                    {queue.code}-001
+                  </p>
+                  <p>
+                    The queue code identifies the line. The number after it is assigned once and
+                    never changes, even after reordering, cancellation or completion.
+                  </p>
+                  <p>
+                    Positions are recalculated automatically when a token is moved or cancelled, so
+                    the waiting list never keeps gaps.
+                  </p>
                 </CardContent>
               </Card>
             </div>
-
-            <Card className="h-fit">
-              <CardHeader>
-                <CardTitle>Queue information</CardTitle>
-                <CardDescription>Reference details for this line.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <dl className="space-y-3.5 text-sm">
-                  <DetailRow label="Status">
-                    <QueueStatusBadge status={queue.status} />
-                  </DetailRow>
-                  <DetailRow label="Waiting count">
-                    <span className="font-medium text-foreground">{queue.waitingCount}</span>
-                  </DetailRow>
-                  <DetailRow label="Created">
-                    <span className="inline-flex items-center gap-1.5 text-foreground">
-                      <CalendarDays className="size-3.5 text-muted-foreground" />
-                      {formatShortDate(queue.createdAt)}
-                    </span>
-                  </DetailRow>
-                  <DetailRow label="Last updated">
-                    <span className="inline-flex items-center gap-1.5 text-foreground">
-                      <Clock3 className="size-3.5 text-muted-foreground" />
-                      {formatShortDate(queue.updatedAt)}
-                    </span>
-                  </DetailRow>
-                  <DetailRow label="Queue ID">
-                    <code className="block break-all font-mono text-xs text-muted-foreground">
-                      {queue.id}
-                    </code>
-                  </DetailRow>
-                </dl>
-              </CardContent>
-            </Card>
           </div>
+
+          <AddParticipantDialog
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            queueId={queue.id}
+            queueName={queue.name}
+            onRegistered={() => refresh()}
+          />
 
           <QueueFormDialog
             open={editOpen}
             onOpenChange={setEditOpen}
             mode="edit"
             queue={queue}
-            onSaved={(updated) => setQueue(updated)}
+            onSaved={handleQueueSaved}
           />
 
           <ConfirmDialog
@@ -321,14 +363,35 @@ export function QueueDetailsPage() {
             description={
               <>
                 <span className="font-semibold text-foreground">{queue.name}</span> will stop
-                accepting new participants until you activate it again. Existing history and queue
-                settings are preserved.
+                accepting new participants until you activate it again. Waiting participants and
+                their order are preserved. Deactivation is blocked while someone is being served.
               </>
             }
             confirmLabel="Deactivate queue"
             variant="destructive"
             loading={statusPending}
             onConfirm={() => void changeStatus("INACTIVE")}
+          />
+
+          <ConfirmDialog
+            open={cancelTarget !== null}
+            onOpenChange={(open) => !open && !cancelPending && setCancelTarget(null)}
+            title={cancelTarget ? `Cancel ${cancelTarget.displayToken}?` : "Cancel token?"}
+            description={
+              cancelTarget ? (
+                <>
+                  <span className="font-semibold text-foreground">
+                    {cancelTarget.participantName}
+                  </span>{" "}
+                  will be removed from the waiting list. The token record is kept for history, and
+                  the participants behind it move up one position.
+                </>
+              ) : null
+            }
+            confirmLabel="Cancel token"
+            variant="destructive"
+            loading={cancelPending}
+            onConfirm={() => void confirmCancel()}
           />
         </>
       ) : null}
@@ -378,10 +441,12 @@ function StateCard({
   icon: Icon,
   title,
   description,
+  action,
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
+  action?: ReactNode;
 }) {
   return (
     <Card>
@@ -393,12 +458,14 @@ function StateCard({
           {title}
         </h1>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">{description}</p>
-        <Button asChild className="mt-6">
-          <Link to="/queues">
-            <ArrowLeft />
-            Back to queues
-          </Link>
-        </Button>
+        {action ?? (
+          <Button asChild className="mt-6">
+            <Link to="/queues">
+              <ArrowLeft />
+              Back to queues
+            </Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -411,12 +478,20 @@ function DetailsSkeleton() {
         <Skeleton className="h-7 w-56" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Skeleton key={index} className="h-[6.25rem] rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="space-y-4">
-          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-52 rounded-2xl" />
           <Skeleton className="h-64 rounded-2xl" />
         </div>
-        <Skeleton className="h-72 rounded-2xl" />
+        <div className="space-y-4">
+          <Skeleton className="h-72 rounded-2xl" />
+          <Skeleton className="h-52 rounded-2xl" />
+        </div>
       </div>
     </div>
   );

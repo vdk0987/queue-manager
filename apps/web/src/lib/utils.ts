@@ -58,6 +58,66 @@ export function formatMonthYear(isoDate: string): string {
   }).format(date);
 }
 
+export function formatClockTime(isoDate: string): string {
+  const date = new Date(isoDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export function formatDateTime(isoDate: string): string {
+  const date = new Date(isoDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+/** Compact elapsed time such as "under a minute", "12m", "1h 05m", "2d 3h". */
+export function formatElapsed(isoDate: string, now: Date = new Date()): string {
+  const date = new Date(isoDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - date.getTime());
+  const minutes = Math.floor(elapsedMs / 60_000);
+
+  if (minutes < 1) {
+    return "under a minute";
+  }
+
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  }
+
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+
+  return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+}
+
 export function getGreeting(date = new Date()): string {
   const hour = date.getHours();
 

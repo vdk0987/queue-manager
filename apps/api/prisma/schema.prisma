@@ -1,7 +1,7 @@
 // QueuePilot data model
 // Phase 1: manager identity + authentication.
 // Phase 2: manager-owned queues with an active/inactive lifecycle.
-// Token models are introduced in Phase 3.
+// Phase 3: participants, tokens, waiting positions, reordering and cancellation.
 
 generator client {
   provider = "prisma-client-js"
@@ -15,6 +15,13 @@ datasource db {
 enum QueueStatus {
   ACTIVE
   INACTIVE
+}
+
+enum TokenStatus {
+  WAITING
+  IN_SERVICE
+  COMPLETED
+  CANCELLED
 }
 
 model Manager {
@@ -34,13 +41,52 @@ model Queue {
   id     String      @id @default(uuid()) @db.Uuid
   name   String      @db.VarChar(100)
   status QueueStatus @default(ACTIVE)
+  /** Short, stable prefix used for human-readable token numbers (e.g. Q7F2-001). */
+  code   String      @unique @db.VarChar(8)
+  /**
+   * Monotonic counter used to allocate token numbers under a queue row lock.
+   * Token numbers are permanent; this counter never moves backwards.
+   */
+  nextTokenNumber Int @default(1) @map("next_token_number")
 
   managerId String @map("manager_id") @db.Uuid
   manager   Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  tokens Token[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([managerId, createdAt])
   @@map("queues")
+}
+
+model Token {
+  id String @id @default(uuid()) @db.Uuid
+
+  /** Permanent, queue-scoped number. It never changes after registration. */
+  tokenNumber Int @map("token_number")
+  /** Mutable order within the waiting list. Null once the token leaves the line. */
+  position    Int?
+
+  participantName String  @map("participant_name") @db.VarChar(100)
+  contactNumber   String? @map("contact_number") @db.VarChar(32)
+  notes           String? @db.VarChar(500)
+
+  status TokenStatus @default(WAITING)
+
+  queueId String @map("queue_id") @db.Uuid
+  queue   Queue  @relation(fields: [queueId], references: [id], onDelete: Cascade)
+
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  serviceStartedAt   DateTime? @map("service_started_at") @db.Timestamptz(6)
+  serviceCompletedAt DateTime? @map("service_completed_at") @db.Timestamptz(6)
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(6)
+
+  @@unique([queueId, tokenNumber])
+  @@unique([queueId, position])
+  @@index([queueId, status, position])
+  @@index([queueId, createdAt])
+  @@map("tokens")
 }

@@ -46,7 +46,7 @@ export function NotFoundPage() {
       </div>
 
       <p className="relative text-center text-[0.6875rem] uppercase tracking-[0.12em] text-muted-foreground">
-        QueuePilot · Phase 2
+        QueuePilot · Phase 3
       </p>
     </div>
   );

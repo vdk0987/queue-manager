@@ -46,7 +46,7 @@ const stats: Array<{
   tone: "indigo" | "emerald" | "amber" | "violet";
 }> = [
   { label: "Total queues", icon: ListOrdered, phase: "Live", tone: "indigo" },
-  { label: "Waiting now", icon: Users, phase: "Phase 3", tone: "emerald" },
+  { label: "Waiting now", icon: Users, phase: "Live", tone: "emerald" },
   { label: "Served today", icon: BadgeCheck, phase: "Phase 4", tone: "amber" },
   { label: "Average wait", icon: Timer, phase: "Phase 5", tone: "violet" },
 ];
@@ -75,13 +75,13 @@ const phases = [
     number: 3,
     title: "Token management",
     description: "Participant registration, token generation, ordering and cancellation.",
-    status: "next" as const,
+    status: "complete" as const,
   },
   {
     number: 4,
     title: "Service flow",
     description: "Assign the next token, track service and complete visits.",
-    status: "planned" as const,
+    status: "next" as const,
   },
   {
     number: 5,
@@ -115,6 +115,12 @@ export function DashboardPage() {
   const now = new Date();
   const firstName = getFirstName(manager.name);
   const totalQueues = queueStatus === "ready" ? queues.length : null;
+  const totalWaiting =
+    queueStatus === "ready" ? queues.reduce((total, queue) => total + queue.waitingCount, 0) : null;
+  const metricValues: Record<string, number | null> = {
+    "Total queues": totalQueues,
+    "Waiting now": totalWaiting,
+  };
 
   return (
     <div className="space-y-6 sm:space-y-7">
@@ -129,8 +135,8 @@ export function DashboardPage() {
               {getGreeting(now)}, {firstName}.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Your queues are live. Create a line, rename it, or pause it without losing its
-              history.
+              Your queues are live. Register participants, hand out token numbers, and keep the
+              waiting list moving without losing a single record.
             </p>
           </div>
 
@@ -152,7 +158,7 @@ export function DashboardPage() {
       </header>
 
       <section
-        aria-label="Phase 2 status"
+        aria-label="Phase 3 status"
         className="relative animate-fade-up overflow-hidden rounded-2xl bg-[#131226] text-white shadow-lifted [animation-delay:60ms]"
       >
         <div
@@ -165,19 +171,20 @@ export function DashboardPage() {
           <div>
             <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
               <BadgeCheck />
-              Phase 2 complete
+              Phase 3 complete
             </Badge>
 
             <h2 className="mt-4 text-xl font-bold tracking-tight sm:text-2xl">
-              Your queue workspace is live.
+              Participants are flowing through your queues.
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-indigo-100/65">
-              Create and name multiple queues, switch between them, and pause a line without losing
-              its history. Every queue is private to your account.
+              Register participants, generate permanent token numbers, reorder the line and cancel
+              visits when plans change. Every action is scoped to your account and preserved for
+              future analytics.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {["Manager-owned queues", "Rename & status control", "Ownership-scoped API"].map(
+              {["Automatic token numbers", "Reorder & cancel", "Live waiting counts"].map(
                 (feature) => (
                   <span
                     key={feature}
@@ -192,12 +199,12 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-5 lg:flex-col lg:items-end lg:gap-3">
-            <ProgressRing value={29} label="2 / 7" />
+            <ProgressRing value={43} label="3 / 7" />
             <div className="lg:text-right">
               <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white/40">
                 Next milestone
               </p>
-              <p className="mt-1 text-sm font-semibold text-white">Token management</p>
+              <p className="mt-1 text-sm font-semibold text-white">Service flow</p>
               <Link
                 to="/queues"
                 className="mt-1 inline-flex items-center text-xs font-medium text-indigo-200 underline-offset-4 hover:underline"
@@ -215,7 +222,7 @@ export function DashboardPage() {
       >
         {stats.map((stat) => {
           const isLive = stat.phase === "Live";
-          const value = stat.label === "Total queues" ? totalQueues : null;
+          const value = isLive ? (metricValues[stat.label] ?? null) : null;
 
           return (
             <Card key={stat.label} className="group transition-shadow hover:shadow-lifted">
@@ -280,7 +287,7 @@ export function DashboardPage() {
             </CardDescription>
           </div>
           <Badge variant="success" className="shrink-0">
-            <CheckCircle2 />2 of 7 complete
+            <CheckCircle2 />3 of 7 complete
           </Badge>
         </CardHeader>
         <CardContent>
@@ -347,7 +354,7 @@ export function DashboardPage() {
             </CardDescription>
           </div>
           <Badge variant="outline" className="shrink-0 bg-muted/40">
-            Phase 3
+            Later
           </Badge>
         </CardHeader>
         <CardContent>
@@ -355,10 +362,10 @@ export function DashboardPage() {
             <div className="grid size-11 place-items-center rounded-xl bg-card text-muted-foreground shadow-sm ring-1 ring-border/60">
               <Activity className="size-5" />
             </div>
-            <p className="mt-4 text-sm font-semibold text-foreground">No activity yet</p>
+            <p className="mt-4 text-sm font-semibold text-foreground">No activity feed yet</p>
             <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-              Once you create a queue and add participants, every registration, reorder and service
-              action will show up here.
+              Registrations, reorders and cancellations are already recorded on each token. A
+              consolidated activity timeline arrives with the analytics phases.
             </p>
           </div>
         </CardContent>

@@ -6,28 +6,31 @@ QueuePilot is a full-stack queue management system for service teams. Managers c
 register participants, move tokens, run service, and understand their performance — all from one
 calm, responsive workspace.
 
-> **Current milestone: Phase 2 — Queue management.** Manager-owned queues now support creation,
-> listing, details, renaming, and active/inactive status control across the API and responsive UI.
-> Participant and token operations follow in Phase 3.
+> **Current milestone: Phase 3 — Token management.** Managers can register participants, generate
+> permanent tokens, reorder the waiting list, cancel visits, and read live queue statistics across
+> the API and responsive UI. Service flow follows in Phase 4.
 
 ---
 
-## Phase 2 at a glance
+## Phase 3 at a glance
 
 | Area                                                  | Status        |
 | ----------------------------------------------------- | ------------- |
 | Phase 1 foundation (auth, sessions, protected routes) | ✅ Complete   |
-| `Queue` model, status enum & migration                | ✅ Complete   |
-| Manager → queue ownership relationship                | ✅ Complete   |
-| Create, list, details, rename & status APIs           | ✅ Complete   |
-| Ownership-scoped queue access                         | ✅ Complete   |
-| Queue dashboard, empty state & responsive cards       | ✅ Complete   |
-| Create / edit queue dialogs with validation           | ✅ Complete   |
-| Activation / deactivation with confirmation           | ✅ Complete   |
-| Dynamic queue details page & breadcrumbs              | ✅ Complete   |
-| Queue API integration tests                           | ✅ 20 passing |
-| Full API test suite                                   | ✅ 36 passing |
-| Participant registration & tokens (Phase 3)           | ⏳ Next       |
+| Phase 2 queues (CRUD, ownership, active/inactive)     | ✅ Complete   |
+| `Token` model, status enum, constraints & migration   | ✅ Complete   |
+| Queue → token relationship with cascade delete        | ✅ Complete   |
+| Sequential, concurrency-safe token generation         | ✅ Complete   |
+| Participant registration API & validation             | ✅ Complete   |
+| Waiting-list retrieval, status filters & statistics   | ✅ Complete   |
+| Transactional move up / move down                     | ✅ Complete   |
+| Cancellation with position normalisation              | ✅ Complete   |
+| Add participant dialog with generated-token success   | ✅ Complete   |
+| Waiting queue with reorder & cancel controls          | ✅ Complete   |
+| Loading, empty, inactive, invalid & error states      | ✅ Complete   |
+| Token API integration & concurrency tests             | ✅ 29 passing |
+| Full API test suite                                   | ✅ 65 passing |
+| Service flow, completion & analytics (Phase 4+)       | ⏳ Next       |
 
 ### Screens
 
@@ -39,17 +42,25 @@ calm, responsive workspace.
 | --------------------------------------------------- | ---------------------------------------------- |
 | ![Overview](docs/screenshots/dashboard-desktop.png) | ![Queues](docs/screenshots/queues-desktop.png) |
 
-| Queue details                                                | Create queue dialog                                       |
-| ------------------------------------------------------------ | --------------------------------------------------------- |
-| ![Queue details](docs/screenshots/queue-details-desktop.png) | ![Create queue](docs/screenshots/queue-create-dialog.png) |
+| Live waiting queue                                           | Generated token dialog                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| ![Queue details](docs/screenshots/queue-details-desktop.png) | ![Generated token](docs/screenshots/add-participant-success.png) |
 
-| Empty queue state                                          | Mobile queue management                              |
-| ---------------------------------------------------------- | ---------------------------------------------------- |
-| ![Empty queues](docs/screenshots/queues-empty-desktop.png) | ![Mobile queues](docs/screenshots/queues-mobile.png) |
+| Reordered and cancelled queue                                      | Inactive queue state                                           |
+| ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| ![Queue operations](docs/screenshots/queue-details-operations.png) | ![Inactive queue](docs/screenshots/queue-details-inactive.png) |
 
-| Mobile queue details                                               | Mobile navigation drawer                                    |
-| ------------------------------------------------------------------ | ----------------------------------------------------------- |
-| ![Mobile queue details](docs/screenshots/queue-details-mobile.png) | ![Mobile navigation](docs/screenshots/queue-mobile-nav.png) |
+| Create queue dialog                                       | Empty queue state                                          |
+| --------------------------------------------------------- | ---------------------------------------------------------- |
+| ![Create queue](docs/screenshots/queue-create-dialog.png) | ![Empty queues](docs/screenshots/queues-empty-desktop.png) |
+
+| Mobile queue details                                               | Mobile queue management                              |
+| ------------------------------------------------------------------ | ---------------------------------------------------- |
+| ![Mobile queue details](docs/screenshots/queue-details-mobile.png) | ![Mobile queues](docs/screenshots/queues-mobile.png) |
+
+| Mobile navigation drawer                                    |
+| ----------------------------------------------------------- |
+| ![Mobile navigation](docs/screenshots/queue-mobile-nav.png) |
 
 | Analytics (Phase 5 preview)                                  | Mobile overview                                          |
 | ------------------------------------------------------------ | -------------------------------------------------------- |
@@ -83,7 +94,7 @@ queue-manager/
 ├── apps/
 │   ├── api/                    # Express API
 │   │   ├── prisma/
-│   │   │   ├── schema.prisma   # Manager + Queue models and migrations
+│   │   │   ├── schema.prisma   # Manager + Queue + Token models and migrations
 │   │   │   └── migrations/
 │   │   ├── src/
 │   │   │   ├── config/         # Validated environment configuration
@@ -92,14 +103,15 @@ queue-manager/
 │   │   │   ├── modules/
 │   │   │   │   ├── auth/       # Register, login, logout, me
 │   │   │   │   ├── health/     # API + database health
-│   │   │   │   └── queues/     # Queue schemas, service, controller, routes
+│   │   │   │   ├── queues/     # Queue schemas, service, controller, routes
+│   │   │   │   └── tokens/     # Token registration, listing, reorder, cancel
 │   │   │   ├── app.ts
 │   │   │   └── index.ts
-│   │   └── tests/              # Auth, hardening & queue integration tests
+│   │   └── tests/              # Auth, hardening, queue & token integration tests
 │   └── web/                    # React SPA
 │       └── src/
-│           ├── components/     # UI primitives, queue UI, layout, dashboard
-│           ├── hooks/          # Queue list state, health polling, document title
+│           ├── components/     # UI primitives, queue/token UI, layout, dashboard
+│           ├── hooks/          # Queue list, queue workspace, health, document title
 │           ├── lib/            # API client, formatting, navigation helpers
 │           ├── pages/          # Dashboard, queues, queue details, auth
 │           ├── providers/      # Auth context + session restoration
@@ -308,16 +320,130 @@ Queue responses use the `{ "success": true, "data": … }` envelope:
     "id": "f26152d1-07a2-4c89-ad6f-3ea4f410e659",
     "name": "General Consultation",
     "status": "ACTIVE",
+    "code": "Q7F2",
     "createdAt": "2026-11-15T00:00:00.000Z",
     "updatedAt": "2026-11-15T00:00:00.000Z",
-    "waitingCount": 0
+    "waitingCount": 3
   }
 }
 ```
 
-`waitingCount` is always `0` until token management lands in Phase 3. Queue names are trimmed,
-internal whitespace is collapsed, and the maximum length is 100 characters. Status updates accept
-`ACTIVE` or `INACTIVE`; deactivation preserves the queue and its history rather than deleting it.
+`waitingCount` is a live count of `WAITING` tokens. `code` is a short queue prefix used in display
+tokens such as `Q7F2-003`. Queue names are trimmed, internal whitespace is collapsed, and the maximum
+length is 100 characters. Status updates accept `ACTIVE` or `INACTIVE`; deactivation preserves the
+queue, its waiting participants, and its history rather than deleting it. Deactivation is rejected
+while a token is `IN_SERVICE`.
+
+### Tokens
+
+Token endpoints require a session and are scoped through the token's queue. A token or queue owned by
+another manager returns the same `404` as a missing record. Display tokens compose the queue code and
+the permanent token number; positions are separate and only apply to `WAITING` tokens.
+
+| Method  | Endpoint                  | Description                                           |
+| ------- | ------------------------- | ----------------------------------------------------- |
+| `POST`  | `/api/queues/:id/tokens`  | Register a participant and generate a token           |
+| `GET`   | `/api/queues/:id/tokens`  | Get the waiting list, current service, and statistics |
+| `GET`   | `/api/tokens/:id`         | Get one owned token                                   |
+| `PATCH` | `/api/tokens/:id/reorder` | Move a waiting token `UP` or `DOWN`                   |
+| `POST`  | `/api/tokens/:id/cancel`  | Cancel a waiting token and preserve its record        |
+
+**Register request**
+
+```json
+{
+  "participantName": "John Doe",
+  "contactNumber": "9876543210",
+  "notes": "General consultation"
+}
+```
+
+`201 Created`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "2a4c9f78-…",
+    "tokenNumber": 4,
+    "displayToken": "Q7F2-004",
+    "participantName": "John Doe",
+    "contactNumber": "9876543210",
+    "notes": "General consultation",
+    "status": "WAITING",
+    "position": 4,
+    "queueId": "f26152d1-…",
+    "createdAt": "2026-11-15T10:00:00.000Z",
+    "updatedAt": "2026-11-15T10:00:00.000Z",
+    "serviceStartedAt": null,
+    "serviceCompletedAt": null,
+    "cancelledAt": null
+  }
+}
+```
+
+**Queue workspace response** (`GET /api/queues/:id/tokens?status=ALL`)
+
+```json
+{
+  "success": true,
+  "data": {
+    "queue": { "id": "f26152d1-…", "name": "General Consultation", "code": "Q7F2" },
+    "currentlyServing": null,
+    "waiting": [
+      {
+        "id": "2a4c9f78-…",
+        "displayToken": "Q7F2-001",
+        "participantName": "John",
+        "position": 1,
+        "status": "WAITING"
+      }
+    ],
+    "waitingCount": 1,
+    "stats": {
+      "totalGenerated": 1,
+      "waitingCount": 1,
+      "inServiceCount": 0,
+      "completedCount": 0,
+      "cancelledCount": 0,
+      "currentQueueLength": 1,
+      "earliestRegistrationAt": "2026-11-15T10:00:00.000Z"
+    },
+    "tokens": []
+  }
+}
+```
+
+`status` accepts `WAITING`, `IN_SERVICE`, `COMPLETED`, `CANCELLED`, or `ALL`. `waiting` is always
+ordered by position. `tokens` is newest-first and is intended for history views. Statistics are
+computed with PostgreSQL aggregates, not frontend counters.
+
+**Reorder request** — `PATCH /api/tokens/:id/reorder`
+
+```json
+{ "direction": "UP" }
+```
+
+The response contains the moved token and the complete ordered waiting list. Moving the first token
+up or the last token down returns `409 TOKEN_REORDER_BOUNDARY`.
+
+**Cancellation request** — `POST /api/tokens/:id/cancel`
+
+```json
+{
+  "success": true,
+  "message": "Token cancelled successfully",
+  "data": {
+    "token": { "status": "CANCELLED", "position": null },
+    "waiting": [],
+    "waitingCount": 0,
+    "stats": {}
+  }
+}
+```
+
+Cancellation sets `cancelledAt`, preserves the permanent token number, removes the token from the
+active waiting list, and renumbers the remaining positions from `1..n`.
 
 ### Error format
 
@@ -332,7 +458,8 @@ internal whitespace is collapsed, and the maximum length is 100 characters. Stat
 
 Validation failures add a `details.fieldErrors` object. Known codes:
 `VALIDATION_ERROR`, `INVALID_JSON`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `QUEUE_NOT_FOUND`,
-`EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `RATE_LIMITED`, `INTERNAL_ERROR`.
+`QUEUE_INACTIVE`, `QUEUE_IN_SERVICE`, `TOKEN_NOT_FOUND`, `TOKEN_NOT_WAITING`,
+`TOKEN_REORDER_BOUNDARY`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `RATE_LIMITED`, `INTERNAL_ERROR`.
 
 ---
 
@@ -386,9 +513,43 @@ Phase 2 adds the `queues` table and a `QueueStatus` enum:
 | `created_at` | TIMESTAMPTZ   | Creation time                              |
 | `updated_at` | TIMESTAMPTZ   | Last rename or status change               |
 
-An index on `(manager_id, created_at)` supports the newest-first queue listing. Both migrations are
-committed under `apps/api/prisma/migrations/`. Token and activity models are added in their
-respective phases.
+An index on `(manager_id, created_at)` supports the newest-first queue listing.
+
+Phase 3 adds the `tokens` table and a `TokenStatus` enum, plus two queue columns used for display
+tokens and safe numbering:
+
+| Column                 | Type          | Notes                                                       |
+| ---------------------- | ------------- | ----------------------------------------------------------- |
+| `id`                   | UUID          | Primary key                                                 |
+| `token_number`         | INTEGER       | Permanent, unique per queue                                 |
+| `position`             | INTEGER NULL  | Waiting-list order only; `NULL` outside the waiting list    |
+| `participant_name`     | VARCHAR(100)  | Trimmed and whitespace-collapsed                            |
+| `contact_number`       | VARCHAR(32)   | Optional                                                    |
+| `notes`                | VARCHAR(500)  | Optional                                                    |
+| `status`               | `TokenStatus` | `WAITING` (default), `IN_SERVICE`, `COMPLETED`, `CANCELLED` |
+| `queue_id`             | UUID          | FK → `queues.id`, `ON DELETE CASCADE`                       |
+| `created_at`           | TIMESTAMPTZ   | Registration time                                           |
+| `updated_at`           | TIMESTAMPTZ   | Last change                                                 |
+| `service_started_at`   | TIMESTAMPTZ   | Reserved for Phase 4                                        |
+| `service_completed_at` | TIMESTAMPTZ   | Reserved for Phase 4                                        |
+| `cancelled_at`         | TIMESTAMPTZ   | Cancellation time                                           |
+
+Queue additions:
+
+| Column              | Type       | Notes                                              |
+| ------------------- | ---------- | -------------------------------------------------- |
+| `code`              | VARCHAR(8) | Unique display prefix, e.g. `Q7F2`                 |
+| `next_token_number` | INTEGER    | Monotonic counter allocated under a queue row lock |
+
+Constraints and indexes:
+
+- `UNIQUE (queue_id, token_number)` — permanent token numbers are never reused.
+- `UNIQUE (queue_id, position)` — one token per waiting position; multiple `NULL`s are allowed.
+- `INDEX (queue_id, status, position)` — waiting-list reads.
+- `INDEX (queue_id, created_at)` — history reads.
+
+All three migrations are committed under `apps/api/prisma/migrations/`. The token migration backfills
+stable queue codes for queues created before Phase 3.
 
 ---
 
@@ -398,46 +559,55 @@ respective phases.
 npm test
 ```
 
-- Runs 36 integration tests with Vitest + Supertest against `queuepilot_test` (16 auth/hardening,
-  20 queue).
+- Runs 65 integration tests with Vitest + Supertest against `queuepilot_test` (16 auth/hardening,
+  20 queue, 29 token).
 - Auth coverage includes registration, normalisation, duplicate emails, password rules, login,
   timing-safe failures, session restoration, bearer auth, logout, CSRF origin rejection, malformed
   JSON, and health checks.
 - Queue coverage includes authentication on every endpoint, creation and whitespace normalisation,
   empty/oversized names, ignored client `managerId`, empty and newest-first listings, details,
   cross-manager isolation, malformed/unknown IDs, renaming, and activate/deactivate round trips.
-- The test runner applies the Prisma schema to the test database automatically.
+- Token coverage includes registration, sequential numbers and positions, inactive queues,
+  validation and ignored client identity fields, queue/token ownership, ordered retrieval, status
+  filters, statistics, reorder boundaries, cancellation, double cancellation, number non-reuse,
+  live waiting counts, deactivation guards, ten-way concurrent registration, and concurrent
+  reordering.
+- The test runner resets and applies the Prisma schema to the isolated test database automatically.
 
-The web app is also verified end-to-end with Playwright across desktop (1440px) and mobile (390px):
-registration → empty state → empty-name validation → create multiple queues → refresh persistence →
-rename → deactivate with confirmation → reactivate → open details → rename from details → invalid
-and unknown queue IDs → repeated status requests → network failure recovery → cross-manager denial →
-mobile navigation drawer, with zero unexpected console errors and no horizontal overflow.
+The queue workflows were also verified in a real browser across desktop and mobile widths:
+registration → generated token → ordered waiting list → move up/down → cancellation confirmation →
+position normalisation → refresh persistence → inactive queue → validation and error states, with no
+unexpected console errors and no horizontal overflow.
 
 ---
 
-## Phase 2 acceptance check
+## Phase 3 acceptance check
 
-| Requirement                     | Verification                                                                       |
-| ------------------------------- | ---------------------------------------------------------------------------------- |
-| Create a queue                  | Create dialog or `POST /api/queues`; defaults to `ACTIVE`                          |
-| Create an empty queue           | Client and server validation reject blank or whitespace-only names                 |
-| Create multiple queues          | All queues appear in the dashboard, newest first                                   |
-| Rename a queue                  | Rename from the listing or details page; `PATCH /api/queues/:id`                   |
-| Deactivate a queue              | Deactivation confirmation; status becomes `INACTIVE`                               |
-| Activate a queue                | Inactive cards show an Activate action; status becomes `ACTIVE`                    |
-| Open a queue                    | `/queues/:id` loads the correct name, status, dates and placeholders               |
-| Access another manager's queue  | `404 QUEUE_NOT_FOUND` on every read/write path                                     |
-| Refresh page                    | Queues persist through PostgreSQL; the list and details reload correctly           |
-| Delete or invalidate a queue ID | Malformed IDs show a validation state; unknown IDs show the not-found state        |
-| Ownership derived server-side   | Client-supplied `managerId` is ignored; every query scopes by session manager      |
-| Soft lifecycle                  | ACTIVE/INACTIVE only; no permanent delete endpoint                                 |
-| Network failures                | Inline errors and toasts; failed creates keep the dialog open without losing input |
-| Repeated requests               | Buttons disable while pending; concurrent status updates remain idempotent         |
-| Responsive UI                   | Verified at 1440px and 390px with no horizontal overflow                           |
+| Requirement                    | Verification                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------ |
+| Register participant           | Add Participant dialog or `POST /api/queues/:id/tokens`; token created as `WAITING`  |
+| Generate unique token          | Numbers allocated from a locked per-queue counter; unique `(queue_id, token_number)` |
+| Sequential numbers             | Multiple registrations receive `1, 2, 3…` and append at the end of the line          |
+| Inactive queue                 | Registration returns `409 QUEUE_INACTIVE`; UI disables Add Participant               |
+| Move token up                  | Position decreases; permanent token number is unchanged                              |
+| Move token down                | Position increases; permanent token number is unchanged                              |
+| First token up                 | `409 TOKEN_REORDER_BOUNDARY`; UI disables the button                                 |
+| Last token down                | `409 TOKEN_REORDER_BOUNDARY`; UI disables the button                                 |
+| Cancel waiting token           | Status becomes `CANCELLED`, timestamp recorded, waiting list renumbered              |
+| Cancel same token twice        | Second request returns `409 TOKEN_NOT_WAITING`                                       |
+| Refresh queue page             | Numbers, order, statuses, and statistics reload from PostgreSQL                      |
+| Concurrent registration        | Ten simultaneous registrations produce unique sequential numbers and positions       |
+| Concurrent reorder             | Queue lock keeps ordering consistent and every position unique                       |
+| Another manager's token        | `404 TOKEN_NOT_FOUND`; no data or existence leak                                     |
+| Queue statistics               | Totals, waiting, in-service, completed, cancelled, length, earliest registration     |
+| Loading / empty / error states | Skeletons, empty CTA, inactive banner, not-found and retryable error states          |
+| Stale data protection          | In-flight reloads are invalidated after mutations                                    |
+| Responsive UI                  | Queue workspace usable at desktop and mobile widths without horizontal overflow      |
 
 Phase 1 verification remains documented in [`docs/PHASE-1.md`](docs/PHASE-1.md). Phase 2 design
-decisions and manual checks are in [`docs/PHASE-2.md`](docs/PHASE-2.md).
+decisions and manual checks are in [`docs/PHASE-2.md`](docs/PHASE-2.md). Phase 3 data model,
+concurrency strategy, API contract, and test matrix are in
+[`docs/PHASE-3.md`](docs/PHASE-3.md).
 
 ---
 
@@ -460,14 +630,15 @@ The intended production split is **Vercel (web) + Render (API) + Neon PostgreSQL
 | ----- | --------------------------------------------------------- | ----------- |
 | 1     | Project setup, database, authentication, protected routes | ✅ Complete |
 | 2     | Queue creation, listing, details, rename, activation      | ✅ Complete |
-| 3     | Participant registration, tokens, ordering, cancellation  | Next        |
-| 4     | Next token, service completion, concurrency safety        | Planned     |
+| 3     | Participant registration, tokens, ordering, cancellation  | ✅ Complete |
+| 4     | Next token, service completion, concurrency safety        | Next        |
 | 5     | Analytics overview, trends, wait times, filters           | Planned     |
 | 6     | UI polish, responsive QA, edge-case testing               | Planned     |
 | 7     | Deployment, README, demo                                  | Planned     |
 
-See [`docs/PHASE-2.md`](docs/PHASE-2.md) for the completed scope, design decisions, and manual
-verification script, and [`docs/PHASE-1.md`](docs/PHASE-1.md) for the foundation.
+See [`docs/PHASE-3.md`](docs/PHASE-3.md) for the token data model, concurrency strategy, API
+contract, and test matrix, [`docs/PHASE-2.md`](docs/PHASE-2.md) for queue management, and
+[`docs/PHASE-1.md`](docs/PHASE-1.md) for the foundation.
 
 ---
 

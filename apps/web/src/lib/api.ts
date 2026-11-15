@@ -12,6 +12,15 @@ import type {
   QueueStatus,
   UpdateQueueInput,
 } from "@/types/queue";
+import type {
+  CancelTokenData,
+  QueueTokensData,
+  RegisterParticipantInput,
+  ReorderTokenData,
+  Token,
+  TokenApiResponse,
+  TokenFilterStatus,
+} from "@/types/token";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 
@@ -157,6 +166,69 @@ export const queueApi = {
         body: { status },
       },
     );
+  },
+};
+
+export const tokenApi = {
+  listForQueue(
+    queueId: string,
+    options: { status?: TokenFilterStatus; signal?: AbortSignal } = {},
+  ): Promise<TokenApiResponse<QueueTokensData>> {
+    const query = new URLSearchParams();
+
+    if (options.status && options.status !== "ALL") {
+      query.set("status", options.status);
+    }
+
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+
+    return apiRequest<TokenApiResponse<QueueTokensData>>(
+      `/api/queues/${encodeURIComponent(queueId)}/tokens${suffix}`,
+      { signal: options.signal },
+    );
+  },
+
+  get(tokenId: string, signal?: AbortSignal): Promise<TokenApiResponse<Token>> {
+    return apiRequest<TokenApiResponse<Token>>(`/api/tokens/${encodeURIComponent(tokenId)}`, {
+      signal,
+    });
+  },
+
+  register(queueId: string, input: RegisterParticipantInput): Promise<TokenApiResponse<Token>> {
+    return apiRequest<TokenApiResponse<Token>>(
+      `/api/queues/${encodeURIComponent(queueId)}/tokens`,
+      {
+        method: "POST",
+        body: input,
+      },
+    );
+  },
+
+  reorder(
+    tokenId: string,
+    input: { direction: "UP" | "DOWN" },
+  ): Promise<TokenApiResponse<ReorderTokenData>> {
+    return apiRequest<TokenApiResponse<ReorderTokenData>>(
+      `/api/tokens/${encodeURIComponent(tokenId)}/reorder`,
+      {
+        method: "PATCH",
+        body: input,
+      },
+    );
+  },
+
+  cancel(tokenId: string): Promise<{
+    success: true;
+    message: string;
+    data: CancelTokenData;
+  }> {
+    return apiRequest<{
+      success: true;
+      message: string;
+      data: CancelTokenData;
+    }>(`/api/tokens/${encodeURIComponent(tokenId)}/cancel`, {
+      method: "POST",
+    });
   },
 };
 

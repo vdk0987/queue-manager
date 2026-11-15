@@ -1,4 +1,5 @@
-import type { Prisma } from "@prisma/client";
+import { randomInt } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import type {
@@ -8,23 +9,60 @@ import type {
 } from "./queue.schemas.js";
 import { publicQueueSelect, toQueueResponse, type QueueResponse } from "./queue.types.js";
 
+/**
+ * Unambiguous alphabet for short queue codes: no 0/O or 1/I confusion when a
+ * manager reads a token aloud or writes it on a ticket.
+ */
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const CODE_LENGTH = 4;
+const CODE_ATTEMPTS = 6;
+
 function queueNotFound(): AppError {
   return new AppError(404, "QUEUE_NOT_FOUND", "Queue not found.");
+}
+
+function generateQueueCode(): string {
+  let suffix = "";
+
+  for (let index = 0; index < CODE_LENGTH; index += 1) {
+    suffix += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+  }
+
+  return `Q${suffix}`;
+}
+
+function isQueueCodeCollision(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
 export async function createQueue(
   managerId: string,
   input: CreateQueueInput,
 ): Promise<QueueResponse> {
-  const queue = await prisma.queue.create({
-    data: {
-      managerId,
-      name: input.name,
-    },
-    select: publicQueueSelect,
-  });
+  for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt += 1) {
+    try {
+      const queue = await prisma.queue.create({
+        data: {
+          managerId,
+          name: input.name,
+          code: generateQueueCode(),
+        },
+        select: publicQueueSelect,
+      });
 
-  return toQueueResponse(queue);
+      return toQueueResponse(queue);
+    } catch (error) {
+      if (isQueueCodeCollision(error) && attempt < CODE_ATTEMPTS - 1) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  // Unreachable: the loop either returns a queue or rethrows. Keeps TypeScript
+  // satisfied without weakening the return type.
+  throw new AppError(500, "INTERNAL_ERROR", "Could not generate a queue code.");
 }
 
 export async function listQueues(managerId: string): Promise<QueueResponse[]> {
@@ -93,8 +131,24 @@ export async function setQueueStatus(
   queueId: string,
   input: UpdateQueueStatusInput,
 ): Promise<QueueResponse> {
-  // Phase 3 adds the first tokens. Once they exist, deactivation must be
-  // rejected while a token is IN_SERVICE, and existing waiting tokens must be
-  // preserved rather than deleted.
+  if (input.status === "INACTIVE") {
+    // A participant currently being served must not be stranded by deactivation.
+    // Waiting tokens are preserved and simply resume when the queue is activated.
+    const inServiceCount = await prisma.token.count({
+      where: {
+        status: "IN_SERVICE",
+        queue: { id: queueId, managerId },
+      },
+    });
+
+    if (inServiceCount > 0) {
+      throw new AppError(
+        409,
+        "QUEUE_IN_SERVICE",
+        "Finish or cancel the token currently in service before deactivating this queue.",
+      );
+    }
+  }
+
   return updateOwnedQueue(managerId, queueId, { status: input.status });
 }

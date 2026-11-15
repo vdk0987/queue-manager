@@ -3,6 +3,7 @@ export type QueueStatus = "ACTIVE" | "INACTIVE";
 export interface Queue {
   id: string;
   name: string;
+  code: string;
   status: QueueStatus;
   createdAt: string;
   updatedAt: string;
