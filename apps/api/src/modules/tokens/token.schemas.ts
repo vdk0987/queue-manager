@@ -50,6 +50,34 @@ export const queueTokenQuerySchema = z.object({
     .optional(),
 });
 
+const optionalDate = z.preprocess(blankToUndefined, z.coerce.date().optional());
+
+export const queueHistoryQuerySchema = z
+  .object({
+    status: z
+      .enum(["COMPLETED", "CANCELLED", "ALL"], {
+        message: "History can be filtered to COMPLETED, CANCELLED or ALL.",
+      })
+      .optional(),
+    startDate: optionalDate,
+    endDate: optionalDate,
+    page: z.coerce.number().int().min(1, "Page must be at least 1.").default(1),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "Limit must be at least 1.")
+      .max(100, "Limit cannot exceed 100.")
+      .default(20),
+  })
+  .refine(
+    (query) =>
+      !query.startDate || !query.endDate || query.startDate.getTime() <= query.endDate.getTime(),
+    {
+      message: "The start date must be on or before the end date.",
+      path: ["endDate"],
+    },
+  );
+
 export const queueIdParamsSchema = z.object({
   id: z.uuid("Enter a valid queue ID."),
 });
@@ -61,3 +89,4 @@ export const tokenIdParamsSchema = z.object({
 export type CreateTokenInput = z.infer<typeof createTokenSchema>;
 export type ReorderTokenInput = z.infer<typeof reorderTokenSchema>;
 export type QueueTokenQuery = z.infer<typeof queueTokenQuerySchema>;
+export type QueueHistoryQuery = z.infer<typeof queueHistoryQuerySchema>;

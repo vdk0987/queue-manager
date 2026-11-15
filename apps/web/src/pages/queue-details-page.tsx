@@ -24,6 +24,7 @@ import { QueueStatusBadge } from "@/components/queues/queue-status-badge";
 import { AddParticipantDialog } from "@/components/tokens/add-participant-dialog";
 import { CurrentlyServingCard } from "@/components/tokens/currently-serving-card";
 import { QueueStatsGrid } from "@/components/tokens/queue-stats";
+import { ServiceHistory } from "@/components/tokens/service-history";
 import { WaitingQueue } from "@/components/tokens/waiting-queue";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useQueueTokens } from "@/hooks/use-queue-tokens";
 import { getErrorMessage, queueApi, tokenApi } from "@/lib/api";
-import { cn, formatShortDate } from "@/lib/utils";
+import { cn, formatDurationSeconds, formatShortDate } from "@/lib/utils";
 import type { Queue } from "@/types/queue";
 import type { Token } from "@/types/token";
 
@@ -49,6 +50,8 @@ export function QueueDetailsPage() {
   const [pendingTokenId, setPendingTokenId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Token | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
+  const [serviceAction, setServiceAction] = useState<"next" | "complete" | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const queue = data?.queue ?? null;
 
@@ -129,12 +132,89 @@ export function QueueDetailsPage() {
 
       toast.success(`${token.displayToken} cancelled. The record is preserved for history.`);
       setCancelTarget(null);
+      setHistoryRefreshKey((key) => key + 1);
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
       setCancelTarget(null);
       refresh();
     } finally {
       setCancelPending(false);
+    }
+  }
+
+  async function handleNextToken() {
+    if (!queue || serviceAction !== null) return;
+
+    setServiceAction("next");
+
+    try {
+      const response = await tokenApi.next(queue.id);
+      const assigned = response.data;
+
+      update((current) => {
+        const waiting = current.waiting
+          .filter((token) => token.id !== assigned.id)
+          .map((token, index) => ({ ...token, position: index + 1 }));
+
+        return {
+          ...current,
+          currentlyServing: assigned,
+          waiting,
+          waitingCount: waiting.length,
+          queue: { ...current.queue, waitingCount: waiting.length },
+          stats: {
+            ...current.stats,
+            waitingCount: waiting.length,
+            currentQueueLength: waiting.length,
+            inServiceCount: 1,
+          },
+          tokens: current.tokens.map((token) => (token.id === assigned.id ? assigned : token)),
+        };
+      });
+
+      toast.success(`${assigned.displayToken} · ${assigned.participantName} is now being served.`);
+      refresh();
+    } catch (requestError) {
+      toast.error(getErrorMessage(requestError));
+      refresh();
+    } finally {
+      setServiceAction(null);
+    }
+  }
+
+  async function handleCompleteService(token: Token) {
+    if (serviceAction !== null) return;
+
+    setServiceAction("complete");
+
+    try {
+      const response = await tokenApi.complete(token.id);
+      const completed = response.data;
+
+      update((current) => ({
+        ...current,
+        currentlyServing:
+          current.currentlyServing?.id === completed.id ? null : current.currentlyServing,
+        stats: {
+          ...current.stats,
+          inServiceCount: Math.max(0, current.stats.inServiceCount - 1),
+          completedCount: current.stats.completedCount + 1,
+        },
+        tokens: current.tokens.map((item) => (item.id === completed.id ? completed : item)),
+      }));
+
+      toast.success(
+        `${completed.displayToken} completed in ${formatDurationSeconds(
+          completed.serviceDurationSeconds,
+        )}. The counter is free for the next participant.`,
+      );
+      setHistoryRefreshKey((key) => key + 1);
+      refresh();
+    } catch (requestError) {
+      toast.error(getErrorMessage(requestError));
+      refresh();
+    } finally {
+      setServiceAction(null);
     }
   }
 
@@ -236,7 +316,12 @@ export function QueueDetailsPage() {
                   <Button
                     variant="destructive"
                     onClick={() => setDeactivateOpen(true)}
-                    disabled={statusPending}
+                    disabled={statusPending || data.currentlyServing !== null}
+                    title={
+                      data.currentlyServing
+                        ? "Complete the current service before deactivating this queue."
+                        : undefined
+                    }
                   >
                     <PauseCircle />
                     Deactivate
@@ -255,7 +340,15 @@ export function QueueDetailsPage() {
 
           <div className="grid animate-fade-up gap-4 xl:grid-cols-[1.35fr_0.65fr] [animation-delay:60ms]">
             <div className="space-y-4">
-              <CurrentlyServingCard token={data.currentlyServing} />
+              <CurrentlyServingCard
+                token={data.currentlyServing}
+                nextUp={data.waiting[0] ?? null}
+                waitingCount={data.waitingCount}
+                queueActive={queue.status === "ACTIVE"}
+                pendingAction={serviceAction}
+                onNext={() => void handleNextToken()}
+                onComplete={(token) => void handleCompleteService(token)}
+              />
 
               <WaitingQueue
                 queue={queue}
@@ -332,13 +425,15 @@ export function QueueDetailsPage() {
                     never changes, even after reordering, cancellation or completion.
                   </p>
                   <p>
-                    Positions are recalculated automatically when a token is moved or cancelled, so
-                    the waiting list never keeps gaps.
+                    Positions are recalculated automatically when a token is moved, cancelled or
+                    called for service, so the waiting list never keeps gaps.
                   </p>
                 </CardContent>
               </Card>
             </div>
           </div>
+
+          <ServiceHistory queueId={queue.id} refreshKey={historyRefreshKey} />
 
           <AddParticipantDialog
             open={addOpen}

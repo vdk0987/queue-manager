@@ -47,7 +47,7 @@ const stats: Array<{
 }> = [
   { label: "Total queues", icon: ListOrdered, phase: "Live", tone: "indigo" },
   { label: "Waiting now", icon: Users, phase: "Live", tone: "emerald" },
-  { label: "Served today", icon: BadgeCheck, phase: "Phase 4", tone: "amber" },
+  { label: "Served today", icon: BadgeCheck, phase: "Phase 5", tone: "amber" },
   { label: "Average wait", icon: Timer, phase: "Phase 5", tone: "violet" },
 ];
 
@@ -81,13 +81,13 @@ const phases = [
     number: 4,
     title: "Service flow",
     description: "Assign the next token, track service and complete visits.",
-    status: "next" as const,
+    status: "complete" as const,
   },
   {
     number: 5,
     title: "Analytics",
     description: "Queue trends, wait-time breakdowns and service duration charts.",
-    status: "planned" as const,
+    status: "next" as const,
   },
   {
     number: 6,
@@ -135,8 +135,8 @@ export function DashboardPage() {
               {getGreeting(now)}, {firstName}.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Your queues are live. Register participants, hand out token numbers, and keep the
-              waiting list moving without losing a single record.
+              Your queues are live. Register participants, call the next person forward, and
+              complete service while every record is preserved for analytics.
             </p>
           </div>
 
@@ -158,7 +158,7 @@ export function DashboardPage() {
       </header>
 
       <section
-        aria-label="Phase 3 status"
+        aria-label="Phase 4 status"
         className="relative animate-fade-up overflow-hidden rounded-2xl bg-[#131226] text-white shadow-lifted [animation-delay:60ms]"
       >
         <div
@@ -171,20 +171,19 @@ export function DashboardPage() {
           <div>
             <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
               <BadgeCheck />
-              Phase 3 complete
+              Phase 4 complete
             </Badge>
 
             <h2 className="mt-4 text-xl font-bold tracking-tight sm:text-2xl">
-              Participants are flowing through your queues.
+              From the waiting line to completed service.
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-indigo-100/65">
-              Register participants, generate permanent token numbers, reorder the line and cancel
-              visits when plans change. Every action is scoped to your account and preserved for
-              future analytics.
+              Call the next participant, track live service duration, complete the visit and keep a
+              permanent history of every completed and cancelled token.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {["Automatic token numbers", "Reorder & cancel", "Live waiting counts"].map(
+              {["Next-token assignment", "Live service timer", "Completed history"].map(
                 (feature) => (
                   <span
                     key={feature}
@@ -199,12 +198,12 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-5 lg:flex-col lg:items-end lg:gap-3">
-            <ProgressRing value={43} label="3 / 7" />
+            <ProgressRing value={57} label="4 / 7" />
             <div className="lg:text-right">
               <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white/40">
                 Next milestone
               </p>
-              <p className="mt-1 text-sm font-semibold text-white">Service flow</p>
+              <p className="mt-1 text-sm font-semibold text-white">Analytics</p>
               <Link
                 to="/queues"
                 className="mt-1 inline-flex items-center text-xs font-medium text-indigo-200 underline-offset-4 hover:underline"

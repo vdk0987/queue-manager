@@ -2,6 +2,7 @@
 // Phase 1: manager identity + authentication.
 // Phase 2: manager-owned queues with an active/inactive lifecycle.
 // Phase 3: participants, tokens, waiting positions, reordering and cancellation.
+// Phase 4: the WAITING -> IN_SERVICE -> COMPLETED service workflow.
 
 generator client {
   provider = "prisma-client-js"
@@ -87,6 +88,7 @@ model Token {
   @@unique([queueId, tokenNumber])
   @@unique([queueId, position])
   @@index([queueId, status, position])
+  @@index([queueId, status])
   @@index([queueId, createdAt])
   @@map("tokens")
 }

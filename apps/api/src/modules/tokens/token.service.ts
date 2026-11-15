@@ -2,11 +2,12 @@ import { Prisma, type QueueStatus, type TokenStatus } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { publicQueueSelect, toQueueResponse } from "../queues/queue.types.js";
-import type { CreateTokenInput, QueueTokenQuery } from "./token.schemas.js";
+import type { CreateTokenInput, QueueHistoryQuery, QueueTokenQuery } from "./token.schemas.js";
 import {
   publicTokenSelect,
   toTokenResponse,
   type CancelTokenResponse,
+  type QueueHistoryResponse,
   type QueueTokenStats,
   type QueueTokensResponse,
   type ReorderTokenResponse,
@@ -41,6 +42,31 @@ function tokenNotWaiting(status: TokenStatus): AppError {
         : "Only waiting tokens can be changed.";
 
   return new AppError(409, "TOKEN_NOT_WAITING", message);
+}
+
+function tokenNotInService(status: TokenStatus): AppError {
+  const message =
+    status === "COMPLETED"
+      ? "This token has already been completed."
+      : status === "CANCELLED"
+        ? "This token was cancelled and cannot be completed."
+        : status === "WAITING"
+          ? "This token is not currently being served."
+          : "Only tokens that are in service can be completed.";
+
+  return new AppError(409, "TOKEN_NOT_IN_SERVICE", message);
+}
+
+function queueInService(): AppError {
+  return new AppError(
+    409,
+    "QUEUE_IN_SERVICE",
+    "Another participant is already being served. Complete that service first.",
+  );
+}
+
+function queueEmpty(): AppError {
+  return new AppError(409, "QUEUE_EMPTY", "There are no waiting participants in this queue.");
 }
 
 function reorderBoundary(direction: "UP" | "DOWN"): AppError {
@@ -145,6 +171,35 @@ async function listWaitingTokens(client: TokenClient, queueId: string): Promise<
   });
 
   return tokens.map(toTokenResponse);
+}
+
+/**
+ * Renumbers the remaining WAITING tokens from 1..n after a token leaves the
+ * line. Running inside the queue lock keeps the unique (queue, position) index
+ * satisfied; ascending updates always move into a just-vacated slot.
+ */
+async function normalizeWaitingPositions(
+  tx: Prisma.TransactionClient,
+  queueId: string,
+): Promise<void> {
+  const remaining = await tx.token.findMany({
+    where: { queueId, status: "WAITING" },
+    select: { id: true, position: true },
+    orderBy: [{ position: "asc" }, { id: "asc" }],
+  });
+
+  let targetPosition = 1;
+
+  for (const current of remaining) {
+    if (current.position !== targetPosition) {
+      await tx.token.update({
+        where: { id: current.id },
+        data: { position: targetPosition },
+      });
+    }
+
+    targetPosition += 1;
+  }
 }
 
 /** Creates a participant token on an active, manager-owned queue. */
@@ -355,27 +410,8 @@ export async function cancelToken(
       select: publicTokenSelect,
     });
 
-    // Renumber the remaining line from 1..n. Updating in ascending order never
-    // collides with the unique (queue, position) index because each target
-    // position was just vacated.
-    const remaining = await tx.token.findMany({
-      where: { queueId: token.queueId, status: "WAITING" },
-      select: { id: true, position: true },
-      orderBy: [{ position: "asc" }, { id: "asc" }],
-    });
-
-    let targetPosition = 1;
-
-    for (const current of remaining) {
-      if (current.position !== targetPosition) {
-        await tx.token.update({
-          where: { id: current.id },
-          data: { position: targetPosition },
-        });
-      }
-
-      targetPosition += 1;
-    }
+    // Renumber the remaining line from 1..n.
+    await normalizeWaitingPositions(tx, token.queueId);
 
     const waiting = await listWaitingTokens(tx, token.queueId);
 
@@ -386,4 +422,200 @@ export async function cancelToken(
       stats: await computeStats(tx, token.queueId),
     };
   });
+}
+
+/**
+ * Assigns the first waiting token to the queue's single service counter.
+ * The queue row lock serialises concurrent calls, so only one token can move
+ * to IN_SERVICE even when managers click Next Token repeatedly.
+ */
+export async function nextToken(managerId: string, queueId: string): Promise<TokenResponse> {
+  return prisma.$transaction(async (tx) => {
+    const queue = await lockOwnedQueue(tx, managerId, queueId);
+
+    if (queue.status !== "ACTIVE") {
+      throw new AppError(
+        409,
+        "QUEUE_INACTIVE",
+        "This queue is inactive. Activate it before assigning the next participant.",
+      );
+    }
+
+    const active = await tx.token.findFirst({
+      where: { queueId: queue.id, status: "IN_SERVICE" },
+      select: { id: true },
+    });
+
+    if (active) {
+      throw queueInService();
+    }
+
+    const next = await tx.token.findFirst({
+      where: { queueId: queue.id, status: "WAITING" },
+      select: { id: true },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+    });
+
+    if (!next) {
+      throw queueEmpty();
+    }
+
+    const assigned = await tx.token.update({
+      where: { id: next.id },
+      data: {
+        status: "IN_SERVICE",
+        position: null,
+        serviceStartedAt: new Date(),
+      },
+      select: publicTokenSelect,
+    });
+
+    // The assigned token leaves the line, so close the gap it left behind.
+    await normalizeWaitingPositions(tx, queue.id);
+
+    return toTokenResponse(assigned);
+  });
+}
+
+/** Returns the active service token, or null when the counter is free. */
+export async function getCurrentToken(
+  managerId: string,
+  queueId: string,
+): Promise<TokenResponse | null> {
+  const queue = await prisma.queue.findFirst({
+    where: { id: queueId, managerId },
+    select: { id: true },
+  });
+
+  if (!queue) {
+    throw queueNotFound();
+  }
+
+  const token = await prisma.token.findFirst({
+    where: { queueId, status: "IN_SERVICE" },
+    select: publicTokenSelect,
+    orderBy: [{ serviceStartedAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  return token ? toTokenResponse(token) : null;
+}
+
+/** Marks the active service COMPLETED and keeps its timestamps for history. */
+export async function completeToken(managerId: string, tokenId: string): Promise<TokenResponse> {
+  return prisma.$transaction(async (tx) => {
+    const queueId = await findOwnedTokenQueueId(tx, managerId, tokenId);
+    await lockOwnedQueue(tx, managerId, queueId);
+
+    const token = await tx.token.findUnique({
+      where: { id: tokenId },
+      select: { id: true, status: true },
+    });
+
+    if (!token) {
+      throw tokenNotFound();
+    }
+
+    if (token.status !== "IN_SERVICE") {
+      throw tokenNotInService(token.status);
+    }
+
+    const completed = await tx.token.update({
+      where: { id: token.id },
+      data: {
+        status: "COMPLETED",
+        serviceCompletedAt: new Date(),
+      },
+      select: publicTokenSelect,
+    });
+
+    return toTokenResponse(completed);
+  });
+}
+
+/** Lists completed and cancelled records, newest event first. */
+export async function listQueueHistory(
+  managerId: string,
+  queueId: string,
+  query: QueueHistoryQuery,
+): Promise<QueueHistoryResponse> {
+  const statuses =
+    query.status && query.status !== "ALL" ? [query.status] : ["COMPLETED", "CANCELLED"];
+
+  const filters: Prisma.Sql[] = [
+    Prisma.sql`t."queue_id" = ${queueId}::uuid`,
+    Prisma.sql`t."status" IN (${Prisma.join(
+      statuses.map((status) => Prisma.sql`${status}::"TokenStatus"`),
+    )})`,
+  ];
+
+  if (query.startDate) {
+    filters.push(
+      Prisma.sql`COALESCE(t."service_completed_at", t."cancelled_at") >= ${query.startDate}`,
+    );
+  }
+
+  if (query.endDate) {
+    filters.push(
+      Prisma.sql`COALESCE(t."service_completed_at", t."cancelled_at") <= ${query.endDate}`,
+    );
+  }
+
+  const whereSql = Prisma.join(filters, " AND ");
+  const offset = (query.page - 1) * query.limit;
+
+  // Completed rows use serviceCompletedAt and cancelled rows use cancelledAt,
+  // so order by whichever terminal timestamp the token actually has. This keeps
+  // both kinds of history interleaved on a single timeline.
+  const [queue, totalRows, orderedRows] = await Promise.all([
+    prisma.queue.findFirst({
+      where: { id: queueId, managerId },
+      select: publicQueueSelect,
+    }),
+    prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS count
+      FROM "tokens" t
+      WHERE ${whereSql}
+    `),
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT t."id"
+      FROM "tokens" t
+      WHERE ${whereSql}
+      ORDER BY COALESCE(t."service_completed_at", t."cancelled_at") DESC NULLS LAST, t."id" DESC
+      LIMIT ${query.limit} OFFSET ${offset}
+    `),
+  ]);
+
+  if (!queue) {
+    throw queueNotFound();
+  }
+
+  const ids = orderedRows.map((row) => row.id);
+  const tokens =
+    ids.length > 0
+      ? await prisma.token.findMany({
+          where: { id: { in: ids } },
+          select: publicTokenSelect,
+        })
+      : [];
+  const byId = new Map(tokens.map((token) => [token.id, token]));
+  const items = ids.flatMap((id) => {
+    const token = byId.get(id);
+    return token ? [toTokenResponse(token)] : [];
+  });
+
+  const total = totalRows[0]?.count ?? 0;
+  const totalPages = Math.ceil(total / query.limit);
+
+  return {
+    queue: toQueueResponse(queue),
+    items,
+    pagination: {
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages,
+      hasNextPage: query.page < totalPages,
+      hasPreviousPage: query.page > 1,
+    },
+  };
 }

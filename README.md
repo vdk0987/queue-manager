@@ -6,31 +6,30 @@ QueuePilot is a full-stack queue management system for service teams. Managers c
 register participants, move tokens, run service, and understand their performance — all from one
 calm, responsive workspace.
 
-> **Current milestone: Phase 3 — Token management.** Managers can register participants, generate
-> permanent tokens, reorder the waiting list, cancel visits, and read live queue statistics across
-> the API and responsive UI. Service flow follows in Phase 4.
+> **Current milestone: Phase 4 — Service management.** Managers can register participants, generate
+> permanent tokens, reorder the waiting list, call the next participant forward, complete service,
+> and review completed/cancelled history across the API and responsive UI. Analytics follows in
+> Phase 5.
 
 ---
 
-## Phase 3 at a glance
+## Phase 4 at a glance
 
 | Area                                                  | Status        |
 | ----------------------------------------------------- | ------------- |
 | Phase 1 foundation (auth, sessions, protected routes) | ✅ Complete   |
 | Phase 2 queues (CRUD, ownership, active/inactive)     | ✅ Complete   |
-| `Token` model, status enum, constraints & migration   | ✅ Complete   |
-| Queue → token relationship with cascade delete        | ✅ Complete   |
-| Sequential, concurrency-safe token generation         | ✅ Complete   |
-| Participant registration API & validation             | ✅ Complete   |
-| Waiting-list retrieval, status filters & statistics   | ✅ Complete   |
-| Transactional move up / move down                     | ✅ Complete   |
-| Cancellation with position normalisation              | ✅ Complete   |
-| Add participant dialog with generated-token success   | ✅ Complete   |
-| Waiting queue with reorder & cancel controls          | ✅ Complete   |
-| Loading, empty, inactive, invalid & error states      | ✅ Complete   |
-| Token API integration & concurrency tests             | ✅ 29 passing |
-| Full API test suite                                   | ✅ 65 passing |
-| Service flow, completion & analytics (Phase 4+)       | ⏳ Next       |
+| Phase 3 tokens (registration, ordering, cancellation) | ✅ Complete   |
+| `(queueId, status)` service index & migration         | ✅ Complete   |
+| Next-token assignment with one active service         | ✅ Complete   |
+| Currently-serving API & live elapsed timer            | ✅ Complete   |
+| Service completion with duration calculation          | ✅ Complete   |
+| Completed/cancelled history API with filters & pages  | ✅ Complete   |
+| Next Token & Complete Service UI integration          | ✅ Complete   |
+| Service history table, filters & pagination           | ✅ Complete   |
+| Concurrency & state-transition tests                  | ✅ 23 passing |
+| Full API test suite                                   | ✅ 88 passing |
+| Analytics dashboard (Phase 5)                         | ⏳ Next       |
 
 ### Screens
 
@@ -49,6 +48,10 @@ calm, responsive workspace.
 | Reordered and cancelled queue                                      | Inactive queue state                                           |
 | ------------------------------------------------------------------ | -------------------------------------------------------------- |
 | ![Queue operations](docs/screenshots/queue-details-operations.png) | ![Inactive queue](docs/screenshots/queue-details-inactive.png) |
+
+| Active service & elapsed timer                                | Completed service history                                      |
+| ------------------------------------------------------------- | -------------------------------------------------------------- |
+| ![Active service](docs/screenshots/queue-details-service.png) | ![Service history](docs/screenshots/queue-details-history.png) |
 
 | Create queue dialog                                       | Empty queue state                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------- |
@@ -104,14 +107,14 @@ queue-manager/
 │   │   │   │   ├── auth/       # Register, login, logout, me
 │   │   │   │   ├── health/     # API + database health
 │   │   │   │   ├── queues/     # Queue schemas, service, controller, routes
-│   │   │   │   └── tokens/     # Token registration, listing, reorder, cancel
+│   │   │   │   └── tokens/     # Token registration, listing, reorder, cancel, service, history
 │   │   │   ├── app.ts
 │   │   │   └── index.ts
 │   │   └── tests/              # Auth, hardening, queue & token integration tests
 │   └── web/                    # React SPA
 │       └── src/
 │           ├── components/     # UI primitives, queue/token UI, layout, dashboard
-│           ├── hooks/          # Queue list, queue workspace, health, document title
+│           ├── hooks/          # Queue list, workspace, history, health, document title
 │           ├── lib/            # API client, formatting, navigation helpers
 │           ├── pages/          # Dashboard, queues, queue details, auth
 │           ├── providers/      # Auth context + session restoration
@@ -530,8 +533,8 @@ tokens and safe numbering:
 | `queue_id`             | UUID          | FK → `queues.id`, `ON DELETE CASCADE`                       |
 | `created_at`           | TIMESTAMPTZ   | Registration time                                           |
 | `updated_at`           | TIMESTAMPTZ   | Last change                                                 |
-| `service_started_at`   | TIMESTAMPTZ   | Reserved for Phase 4                                        |
-| `service_completed_at` | TIMESTAMPTZ   | Reserved for Phase 4                                        |
+| `service_started_at`   | TIMESTAMPTZ   | Set when the token is called into service                   |
+| `service_completed_at` | TIMESTAMPTZ   | Set when the active service is completed                    |
 | `cancelled_at`         | TIMESTAMPTZ   | Cancellation time                                           |
 
 Queue additions:
@@ -546,10 +549,12 @@ Constraints and indexes:
 - `UNIQUE (queue_id, token_number)` — permanent token numbers are never reused.
 - `UNIQUE (queue_id, position)` — one token per waiting position; multiple `NULL`s are allowed.
 - `INDEX (queue_id, status, position)` — waiting-list reads.
+- `INDEX (queue_id, status)` — active-service lookup and history filters.
 - `INDEX (queue_id, created_at)` — history reads.
 
-All three migrations are committed under `apps/api/prisma/migrations/`. The token migration backfills
-stable queue codes for queues created before Phase 3.
+All four migrations are committed under `apps/api/prisma/migrations/`. The token migration backfills
+stable queue codes for queues created before Phase 3; the service migration adds the status index
+used by Phase 4.
 
 ---
 
@@ -559,8 +564,8 @@ stable queue codes for queues created before Phase 3.
 npm test
 ```
 
-- Runs 65 integration tests with Vitest + Supertest against `queuepilot_test` (16 auth/hardening,
-  20 queue, 29 token).
+- Runs 88 integration tests with Vitest + Supertest against `queuepilot_test` (16 auth/hardening,
+  20 queue, 29 token, 23 service).
 - Auth coverage includes registration, normalisation, duplicate emails, password rules, login,
   timing-safe failures, session restoration, bearer auth, logout, CSRF origin rejection, malformed
   JSON, and health checks.
@@ -572,12 +577,42 @@ npm test
   filters, statistics, reorder boundaries, cancellation, double cancellation, number non-reuse,
   live waiting counts, deactivation guards, ten-way concurrent registration, and concurrent
   reordering.
+- Service coverage includes next-token assignment, empty/inactive/busy rejection, current-service
+  reads and refresh persistence, timestamps and durations, waiting time, completion transitions,
+  double completion, cancelled-token rejection, post-completion assignment, concurrent assignment,
+  ownership, chronological history, filters, pagination, and database consistency after failures.
 - The test runner resets and applies the Prisma schema to the isolated test database automatically.
 
 The queue workflows were also verified in a real browser across desktop and mobile widths:
 registration → generated token → ordered waiting list → move up/down → cancellation confirmation →
 position normalisation → refresh persistence → inactive queue → validation and error states, with no
-unexpected console errors and no horizontal overflow.
+unexpected console errors and no horizontal overflow. Phase 4 adds a Chromium smoke test for
+next-token assignment → refresh during service → completion → chronological history, with no page
+errors or 5xx responses.
+
+---
+
+## Phase 4 acceptance check
+
+| Requirement                    | Verification                                                                      |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| Assign next token              | First waiting token becomes `IN_SERVICE`; start timestamp recorded                |
+| Empty queue                    | `409 QUEUE_EMPTY`; no token is assigned                                           |
+| Assign while serving           | `409 QUEUE_IN_SERVICE`; only one token stays active                               |
+| Complete active service        | Status becomes `COMPLETED`; completion timestamp and duration recorded            |
+| Complete waiting token         | `409 TOKEN_NOT_IN_SERVICE`; waiting token is unchanged                            |
+| Complete same token twice      | Second request returns `409 TOKEN_NOT_IN_SERVICE`                                 |
+| Complete cancelled token       | Rejected; cancelled record and timestamps are preserved                           |
+| Assign after completion        | Next waiting token is assigned and positions are normalised                       |
+| Refresh during service         | Current token, participant, start time and live elapsed timer remain visible      |
+| Concurrent Next Token requests | Queue lock allows exactly one assignment; the rest receive `QUEUE_IN_SERVICE`     |
+| Another manager's data         | `404` for Next, Current, Complete and History; no existence leak                  |
+| Service history                | Completed and cancelled records merged chronologically with status/date filters   |
+| Pagination                     | Page/limit metadata, previous/next controls, stable ordering                      |
+| Waiting and service durations  | Calculated from persisted timestamps and returned in seconds                      |
+| Waiting positions              | Remaining line is renumbered `1..n` after assignment, cancellation and completion |
+| Loading / empty / error states | Skeletons, idle-service state, empty-history state, retryable error alerts        |
+| Duplicate submissions          | Next and Complete controls disable while requests are in flight                   |
 
 ---
 
@@ -607,7 +642,8 @@ unexpected console errors and no horizontal overflow.
 Phase 1 verification remains documented in [`docs/PHASE-1.md`](docs/PHASE-1.md). Phase 2 design
 decisions and manual checks are in [`docs/PHASE-2.md`](docs/PHASE-2.md). Phase 3 data model,
 concurrency strategy, API contract, and test matrix are in
-[`docs/PHASE-3.md`](docs/PHASE-3.md).
+[`docs/PHASE-3.md`](docs/PHASE-3.md). Phase 4 service lifecycle, API contract, concurrency strategy,
+history behaviour, and test matrix are in [`docs/PHASE-4.md`](docs/PHASE-4.md).
 
 ---
 
@@ -631,13 +667,14 @@ The intended production split is **Vercel (web) + Render (API) + Neon PostgreSQL
 | 1     | Project setup, database, authentication, protected routes | ✅ Complete |
 | 2     | Queue creation, listing, details, rename, activation      | ✅ Complete |
 | 3     | Participant registration, tokens, ordering, cancellation  | ✅ Complete |
-| 4     | Next token, service completion, concurrency safety        | Next        |
-| 5     | Analytics overview, trends, wait times, filters           | Planned     |
+| 4     | Next token, service completion, history & concurrency     | ✅ Complete |
+| 5     | Analytics overview, trends, wait times, filters           | Next        |
 | 6     | UI polish, responsive QA, edge-case testing               | Planned     |
 | 7     | Deployment, README, demo                                  | Planned     |
 
-See [`docs/PHASE-3.md`](docs/PHASE-3.md) for the token data model, concurrency strategy, API
-contract, and test matrix, [`docs/PHASE-2.md`](docs/PHASE-2.md) for queue management, and
+See [`docs/PHASE-4.md`](docs/PHASE-4.md) for the service lifecycle, API contract, concurrency
+strategy and test matrix, [`docs/PHASE-3.md`](docs/PHASE-3.md) for the token data model,
+[`docs/PHASE-2.md`](docs/PHASE-2.md) for queue management, and
 [`docs/PHASE-1.md`](docs/PHASE-1.md) for the foundation.
 
 ---

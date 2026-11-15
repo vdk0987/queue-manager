@@ -118,6 +118,31 @@ export function formatElapsed(isoDate: string, now: Date = new Date()): string {
   return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
+/** Formats a persisted duration in seconds, e.g. 45s, 8m 12s, 1h 05m. */
+export function formatDurationSeconds(totalSeconds: number | null): string {
+  if (totalSeconds === null || !Number.isFinite(totalSeconds)) {
+    return "—";
+  }
+
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (minutes < 60) {
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
 export function getGreeting(date = new Date()): string {
   const hour = date.getHours();
 

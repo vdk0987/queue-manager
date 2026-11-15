@@ -81,7 +81,7 @@ export function QueueStatsGrid({ stats }: { stats: QueueTokenStats }) {
         icon={UserCheck}
         label="In service"
         value={String(stats.inServiceCount)}
-        detail="Service flow in Phase 4"
+        detail="Being served right now"
         tone="emerald"
       />
       <StatTile

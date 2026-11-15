@@ -19,6 +19,10 @@ export interface Token {
   serviceStartedAt: string | null;
   serviceCompletedAt: string | null;
   cancelledAt: string | null;
+  /** Seconds from registration to service start, once service has begun. */
+  waitingTimeSeconds: number | null;
+  /** Seconds from service start to completion, once service has finished. */
+  serviceDurationSeconds: number | null;
 }
 
 export interface QueueTokenStats {
@@ -60,6 +64,23 @@ export interface CancelTokenData {
   waiting: Token[];
   waitingCount: number;
   stats: QueueTokenStats;
+}
+
+export type HistoryStatusFilter = "ALL" | "COMPLETED" | "CANCELLED";
+
+export interface QueueHistoryPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface QueueHistoryData {
+  queue: Queue;
+  items: Token[];
+  pagination: QueueHistoryPagination;
 }
 
 export type TokenApiResponse<T> = QueueApiResponse<T>;

@@ -80,7 +80,7 @@ export function AuthPage({ mode }: AuthPageProps) {
         <div className="flex items-center justify-between lg:hidden">
           <Logo showTagline />
           <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground shadow-xs">
-            Phase 3
+            Phase 4
           </span>
         </div>
 
@@ -121,7 +121,7 @@ export function AuthPage({ mode }: AuthPageProps) {
         <footer className="flex flex-col items-center justify-between gap-2 border-t border-border/70 pt-5 text-[0.6875rem] text-muted-foreground sm:flex-row">
           <span>© {new Date().getFullYear()} QueuePilot</span>
           <span className="font-medium uppercase tracking-[0.12em]">
-            Manager workspace · Phase 3
+            Manager workspace · Phase 4
           </span>
         </footer>
       </main>

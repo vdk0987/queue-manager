@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { validateBody, validateParams } from "../../lib/validation.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { cancelTokenHandler, getTokenHandler, reorderTokenHandler } from "./token.controller.js";
+import {
+  cancelTokenHandler,
+  completeTokenHandler,
+  getTokenHandler,
+  reorderTokenHandler,
+} from "./token.controller.js";
 import { reorderTokenSchema, tokenIdParamsSchema } from "./token.schemas.js";
 
 export const tokenRouter = Router();
@@ -22,3 +27,4 @@ tokenRouter.patch(
   reorderTokenHandler,
 );
 tokenRouter.post("/:id/cancel", validateParams(tokenIdParamsSchema), cancelTokenHandler);
+tokenRouter.post("/:id/complete", validateParams(tokenIdParamsSchema), completeTokenHandler);

@@ -3,11 +3,15 @@ import { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { getAuthenticatedManager } from "../../middleware/auth.js";
 import type { CreateTokenInput, ReorderTokenInput } from "./token.schemas.js";
-import { queueTokenQuerySchema } from "./token.schemas.js";
+import { queueHistoryQuerySchema, queueTokenQuerySchema } from "./token.schemas.js";
 import {
   cancelToken,
+  completeToken,
+  getCurrentToken,
   getToken,
+  listQueueHistory,
   listQueueTokens,
+  nextToken,
   registerToken,
   reorderToken,
 } from "./token.service.js";
@@ -32,6 +36,18 @@ function readStatusFilter(req: Request) {
   }
 
   return result.data.status;
+}
+
+function readHistoryQuery(req: Request) {
+  const result = queueHistoryQuerySchema.safeParse(req.query);
+
+  if (!result.success) {
+    throw new AppError(400, "VALIDATION_ERROR", "Some filters need your attention.", {
+      fieldErrors: z.flattenError(result.error).fieldErrors,
+    });
+  }
+
+  return result.data;
 }
 
 export async function registerTokenHandler(req: Request, res: Response): Promise<void> {
@@ -72,4 +88,36 @@ export async function cancelTokenHandler(req: Request, res: Response): Promise<v
     message: "Token cancelled successfully",
     data: result,
   });
+}
+
+export async function nextTokenHandler(req: Request, res: Response): Promise<void> {
+  const manager = getAuthenticatedManager(req);
+  const token = await nextToken(manager.id, readParam(req, "id"));
+
+  res.status(200).json({ success: true, data: token });
+}
+
+export async function getCurrentTokenHandler(req: Request, res: Response): Promise<void> {
+  const manager = getAuthenticatedManager(req);
+  const token = await getCurrentToken(manager.id, readParam(req, "id"));
+
+  res.status(200).json({ success: true, data: token });
+}
+
+export async function completeTokenHandler(req: Request, res: Response): Promise<void> {
+  const manager = getAuthenticatedManager(req);
+  const token = await completeToken(manager.id, readParam(req, "id"));
+
+  res.status(200).json({
+    success: true,
+    message: "Service completed successfully",
+    data: token,
+  });
+}
+
+export async function listQueueHistoryHandler(req: Request, res: Response): Promise<void> {
+  const manager = getAuthenticatedManager(req);
+  const result = await listQueueHistory(manager.id, readParam(req, "id"), readHistoryQuery(req));
+
+  res.status(200).json({ success: true, data: result });
 }

@@ -14,6 +14,8 @@ import type {
 } from "@/types/queue";
 import type {
   CancelTokenData,
+  HistoryStatusFilter,
+  QueueHistoryData,
   QueueTokensData,
   RegisterParticipantInput,
   ReorderTokenData,
@@ -229,6 +231,64 @@ export const tokenApi = {
     }>(`/api/tokens/${encodeURIComponent(tokenId)}/cancel`, {
       method: "POST",
     });
+  },
+
+  next(queueId: string): Promise<TokenApiResponse<Token>> {
+    return apiRequest<TokenApiResponse<Token>>(`/api/queues/${encodeURIComponent(queueId)}/next`, {
+      method: "POST",
+    });
+  },
+
+  current(queueId: string, signal?: AbortSignal): Promise<TokenApiResponse<Token | null>> {
+    return apiRequest<TokenApiResponse<Token | null>>(
+      `/api/queues/${encodeURIComponent(queueId)}/current`,
+      { signal },
+    );
+  },
+
+  complete(tokenId: string): Promise<{
+    success: true;
+    message: string;
+    data: Token;
+  }> {
+    return apiRequest<{
+      success: true;
+      message: string;
+      data: Token;
+    }>(`/api/tokens/${encodeURIComponent(tokenId)}/complete`, {
+      method: "POST",
+    });
+  },
+
+  history(
+    queueId: string,
+    options: {
+      status?: HistoryStatusFilter;
+      page?: number;
+      limit?: number;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<TokenApiResponse<QueueHistoryData>> {
+    const query = new URLSearchParams();
+
+    if (options.status && options.status !== "ALL") {
+      query.set("status", options.status);
+    }
+
+    if (options.page) {
+      query.set("page", String(options.page));
+    }
+
+    if (options.limit) {
+      query.set("limit", String(options.limit));
+    }
+
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+
+    return apiRequest<TokenApiResponse<QueueHistoryData>>(
+      `/api/queues/${encodeURIComponent(queueId)}/history${suffix}`,
+      { signal: options.signal },
+    );
   },
 };
 

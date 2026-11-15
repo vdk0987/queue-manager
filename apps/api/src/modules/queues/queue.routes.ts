@@ -15,6 +15,11 @@ import {
   updateQueueStatusSchema,
 } from "./queue.schemas.js";
 import { listQueueTokensHandler, registerTokenHandler } from "../tokens/token.controller.js";
+import {
+  getCurrentTokenHandler,
+  listQueueHistoryHandler,
+  nextTokenHandler,
+} from "../tokens/token.controller.js";
 import { createTokenSchema } from "../tokens/token.schemas.js";
 
 export const queueRouter = Router();
@@ -36,6 +41,9 @@ queueRouter.post(
   validateBody(createTokenSchema),
   registerTokenHandler,
 );
+queueRouter.get("/:id/current", validateParams(queueIdParamsSchema), getCurrentTokenHandler);
+queueRouter.post("/:id/next", validateParams(queueIdParamsSchema), nextTokenHandler);
+queueRouter.get("/:id/history", validateParams(queueIdParamsSchema), listQueueHistoryHandler);
 queueRouter.get("/:id", validateParams(queueIdParamsSchema), getQueueHandler);
 queueRouter.patch(
   "/:id/status",

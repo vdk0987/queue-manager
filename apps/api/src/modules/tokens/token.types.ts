@@ -58,6 +58,10 @@ export interface TokenResponse {
   serviceStartedAt: Date | null;
   serviceCompletedAt: Date | null;
   cancelledAt: Date | null;
+  /** Seconds between registration and service start, once service has begun. */
+  waitingTimeSeconds: number | null;
+  /** Seconds between service start and completion, once service has finished. */
+  serviceDurationSeconds: number | null;
 }
 
 export interface QueueTokenStats {
@@ -93,8 +97,33 @@ export interface CancelTokenResponse {
   stats: QueueTokenStats;
 }
 
+export interface QueueHistoryPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface QueueHistoryResponse {
+  queue: QueueResponse;
+  /** Completed and cancelled records, newest first. */
+  items: TokenResponse[];
+  pagination: QueueHistoryPagination;
+}
+
 export function formatDisplayToken(code: string, tokenNumber: number): string {
   return `${code}-${String(tokenNumber).padStart(3, "0")}`;
+}
+
+/** Whole seconds between two persisted timestamps, or null if either is missing. */
+export function secondsBetween(start: Date | null, end: Date | null): number | null {
+  if (!start || !end) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
 }
 
 export function toTokenResponse(token: PublicToken): TokenResponse {
@@ -113,5 +142,7 @@ export function toTokenResponse(token: PublicToken): TokenResponse {
     serviceStartedAt: token.serviceStartedAt,
     serviceCompletedAt: token.serviceCompletedAt,
     cancelledAt: token.cancelledAt,
+    waitingTimeSeconds: secondsBetween(token.createdAt, token.serviceStartedAt),
+    serviceDurationSeconds: secondsBetween(token.serviceStartedAt, token.serviceCompletedAt),
   };
 }
