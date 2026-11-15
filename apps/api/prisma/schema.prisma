@@ -1,9 +1,6 @@
 // QueuePilot data model
-// Phase 1: manager identity + authentication.
-// Phase 2: manager-owned queues with an active/inactive lifecycle.
-// Phase 3: participants, tokens, waiting positions, reordering and cancellation.
-// Phase 4: the WAITING -> IN_SERVICE -> COMPLETED service workflow.
-// Phase 5: immutable queue activity events for historical analytics.
+// QueuePilot data model for manager identity, queue operations, service flow,
+// and immutable queue activity analytics.
 
 generator client {
   provider = "prisma-client-js"

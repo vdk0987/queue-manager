@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
+import { useTheme } from "@/providers/theme-provider";
 import { ProtectedRoute, PublicOnlyRoute } from "@/components/auth/route-guards";
 import { AppShell } from "@/components/layout/app-shell";
 import { AnalyticsPage } from "@/pages/analytics-page";
@@ -10,6 +11,8 @@ import { QueueDetailsPage } from "@/pages/queue-details-page";
 import { QueuesPage } from "@/pages/queues-page";
 
 export default function App() {
+  const { theme } = useTheme();
+
   return (
     <>
       <Routes>
@@ -32,7 +35,7 @@ export default function App() {
 
       <Toaster
         position="bottom-right"
-        theme="light"
+        theme={theme}
         richColors
         closeButton
         toastOptions={{

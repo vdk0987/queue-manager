@@ -1,7 +1,6 @@
-import { ChevronDown, LogOut, Menu, ShieldCheck } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, ShieldCheck, Sun } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getInitials } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
+import { useTheme } from "@/providers/theme-provider";
 
 interface TopbarProps {
   onOpenSidebar: () => void;
@@ -21,6 +21,7 @@ interface TopbarProps {
 
 export function Topbar({ onOpenSidebar, pageTitle }: TopbarProps) {
   const { manager, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -50,12 +51,15 @@ export function Topbar({ onOpenSidebar, pageTitle }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-2.5">
-        <Badge variant="outline" className="hidden bg-card/80 sm:inline-flex">
-          <span className="size-1.5 rounded-full bg-emerald-500" />
-          Phase 4 · Live
-        </Badge>
-
-        <div className="hidden h-5 w-px bg-border sm:block" />
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? <Sun /> : <Moon />}
+        </Button>
 
         {manager ? (
           <DropdownMenu>

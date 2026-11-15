@@ -61,41 +61,13 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
                       )}
                     />
                     <span>{item.label}</span>
-                    {item.phase ? (
-                      <span className="ml-auto rounded-full border border-border/80 bg-background px-1.5 py-0.5 text-[0.5625rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-                        {item.phase}
-                      </span>
-                    ) : null}
                   </>
                 )}
               </NavLink>
             </li>
           ))}
         </ul>
-
-        <div className="mt-8 rounded-xl border border-dashed border-border/80 px-3.5 py-3">
-          <p className="text-[0.6875rem] font-semibold text-foreground">Built in phases</p>
-          <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted-foreground">
-            Participant registration, service flow and history are live. Analytics is rolling out
-            next.
-          </p>
-        </div>
       </nav>
-
-      <div className="shrink-0 p-3">
-        <div className="rounded-xl border border-indigo-100/80 bg-gradient-to-br from-indigo-50/90 to-violet-50/50 p-3.5">
-          <div className="flex items-center justify-between">
-            <p className="text-[0.6875rem] font-semibold text-foreground">Phase 4 of 7</p>
-            <span className="text-[0.625rem] font-semibold text-primary">57%</span>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100">
-            <div className="h-full w-[57%] rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
-          </div>
-          <p className="mt-2 text-[0.625rem] leading-relaxed text-muted-foreground">
-            Participants, service flow and completed history are live.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

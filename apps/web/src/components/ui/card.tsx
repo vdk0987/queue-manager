@@ -5,7 +5,7 @@ function Card({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "min-w-0 rounded-2xl border border-border/75 bg-card text-card-foreground shadow-card",
+        "min-w-0 overflow-hidden rounded-2xl border border-border/75 bg-card text-card-foreground shadow-card",
         className,
       )}
       {...props}

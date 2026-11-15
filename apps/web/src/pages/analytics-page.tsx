@@ -82,7 +82,7 @@ function MetricCard({
 }) {
   return (
     <Card>
-      <CardContent className="p-5">
+      <CardContent className="p-5 pt-6 sm:p-6 sm:pt-7">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -165,7 +165,7 @@ export function AnalyticsPage() {
               aria-label="Filter analytics by queue"
               value={queueId}
               onChange={(event) => setQueueId(event.target.value)}
-              className="h-9 rounded-lg border border-border bg-card px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
+              className="h-9 rounded-lg border border-border bg-card px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-primary/20 dark:bg-card"
             >
               <option value="">All queues</option>
               {queues.map((queue) => (
@@ -178,7 +178,7 @@ export function AnalyticsPage() {
               aria-label="Filter analytics by date range"
               value={range}
               onChange={(event) => setRange(event.target.value as RangePreset)}
-              className="h-9 rounded-lg border border-border bg-card px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
+              className="h-9 rounded-lg border border-border bg-card px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-primary/20 dark:bg-card"
             >
               {RANGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -228,28 +228,28 @@ export function AnalyticsPage() {
               value={formatNumber(data.summary.registeredInRange)}
               detail={`${formatNumber(data.summary.totalTokens)} total records`}
               icon={Users}
-              tone="bg-indigo-50 text-indigo-600"
+              tone="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300"
             />
             <MetricCard
               label="Waiting now"
               value={formatNumber(data.summary.waiting)}
               detail={`${formatNumber(data.summary.inService)} currently serving`}
               icon={Clock3}
-              tone="bg-amber-50 text-amber-600"
+              tone="bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300"
             />
             <MetricCard
               label="Completed"
               value={formatNumber(data.summary.completedInRange)}
               detail={`${formatPercent(data.summary.completionRate)} completion rate`}
               icon={CheckCircle2}
-              tone="bg-emerald-50 text-emerald-600"
+              tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300"
             />
             <MetricCard
               label="Cancelled"
               value={formatNumber(data.summary.cancelledInRange)}
               detail={`${formatNumber(data.summary.cancelled)} total cancelled`}
               icon={XCircle}
-              tone="bg-rose-50 text-rose-600"
+              tone="bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300"
             />
           </div>
 
@@ -258,32 +258,32 @@ export function AnalyticsPage() {
               label="Average wait"
               value={formatDuration(data.metrics.averageWaitSeconds)}
               icon={Clock3}
-              tone="bg-violet-50 text-violet-600"
+              tone="bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300"
             />
             <MetricCard
               label="Median wait"
               value={formatDuration(data.metrics.medianWaitSeconds)}
               icon={Activity}
-              tone="bg-sky-50 text-sky-600"
+              tone="bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
             />
             <MetricCard
               label="Average service"
               value={formatDuration(data.metrics.averageServiceSeconds)}
               icon={BarChart3}
-              tone="bg-cyan-50 text-cyan-600"
+              tone="bg-cyan-50 text-cyan-600 dark:bg-cyan-950/50 dark:text-cyan-300"
             />
             <MetricCard
               label="Peak queue"
               value={formatNumber(data.metrics.peakWaiting)}
               detail={`${formatNumber(data.summary.throughputPerDay)} completed/day`}
               icon={CalendarDays}
-              tone="bg-orange-50 text-orange-600"
+              tone="bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300"
             />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
             <Card>
-              <CardHeader>
+              <CardHeader className="pt-6 sm:pt-7">
                 <CardTitle>Queue activity</CardTitle>
                 <CardDescription>
                   Registrations, completions, cancellations, and queue size at close.
@@ -338,7 +338,7 @@ export function AnalyticsPage() {
             </Card>
 
             <Card>
-              <CardHeader>
+              <CardHeader className="pt-6 sm:pt-7">
                 <CardTitle>Outcome mix</CardTitle>
                 <CardDescription>
                   Completed and cancelled records in the selected range.
@@ -373,7 +373,7 @@ export function AnalyticsPage() {
 
           <div className="grid gap-4 xl:grid-cols-2">
             <Card>
-              <CardHeader>
+              <CardHeader className="pt-6 sm:pt-7">
                 <CardTitle>Waiting-time distribution</CardTitle>
                 <CardDescription>
                   Completed services grouped by how long participants waited.
@@ -402,7 +402,7 @@ export function AnalyticsPage() {
             </Card>
 
             <Card>
-              <CardHeader>
+              <CardHeader className="pt-6 sm:pt-7">
                 <CardTitle>Service duration distribution</CardTitle>
                 <CardDescription>Completed services grouped by duration.</CardDescription>
               </CardHeader>
@@ -426,7 +426,7 @@ export function AnalyticsPage() {
 
           {data.queues.length > 1 ? (
             <Card>
-              <CardHeader>
+              <CardHeader className="pt-6 sm:pt-7">
                 <CardTitle>Queue comparison</CardTitle>
                 <CardDescription>Current load and historical performance by queue.</CardDescription>
               </CardHeader>

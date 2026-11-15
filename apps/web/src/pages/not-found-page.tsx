@@ -33,8 +33,7 @@ export function NotFoundPage() {
             This page isn&apos;t in the queue.
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            The page you were looking for may have moved, or it belongs to a phase that hasn&apos;t
-            shipped yet.
+            The page you were looking for may have moved or is no longer available.
           </p>
           <Button asChild className="mt-6">
             <Link to={destination}>
@@ -46,7 +45,7 @@ export function NotFoundPage() {
       </div>
 
       <p className="relative text-center text-[0.6875rem] uppercase tracking-[0.12em] text-muted-foreground">
-        QueuePilot · Phase 4
+        QueuePilot
       </p>
     </div>
   );

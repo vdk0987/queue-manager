@@ -1,4 +1,3 @@
--- Phase 5: analytics foundation.
 --
 -- * queues.timezone gives every queue a local calendar for date grouping.
 -- * queue_activities is an append-only event log used to reconstruct historical

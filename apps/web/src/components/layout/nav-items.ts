@@ -5,13 +5,12 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
-  phase?: string;
 }
 
 export const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/queues", label: "Queues", icon: ListOrdered },
-  { to: "/analytics", label: "Analytics", icon: BarChart3, phase: "Phase 5" },
+  { to: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function getPageTitle(pathname: string): string {

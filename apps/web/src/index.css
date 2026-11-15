@@ -2,6 +2,8 @@
 @import "@fontsource-variable/manrope";
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: oklch(0.982 0.004 90);
   --foreground: oklch(0.22 0.025 277);
@@ -32,6 +34,37 @@
   --chart-4: oklch(0.62 0.2 25);
   --chart-5: oklch(0.6 0.12 230);
   --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(0.17 0.025 277);
+  --foreground: oklch(0.94 0.012 277);
+  --card: oklch(0.215 0.028 277);
+  --card-foreground: oklch(0.94 0.012 277);
+  --popover: oklch(0.23 0.03 277);
+  --popover-foreground: oklch(0.94 0.012 277);
+  --primary: oklch(0.68 0.19 277);
+  --primary-foreground: oklch(0.15 0.025 277);
+  --secondary: oklch(0.27 0.03 277);
+  --secondary-foreground: oklch(0.9 0.015 277);
+  --muted: oklch(0.255 0.025 277);
+  --muted-foreground: oklch(0.7 0.025 277);
+  --accent: oklch(0.28 0.06 165);
+  --accent-foreground: oklch(0.86 0.08 165);
+  --destructive: oklch(0.68 0.19 27);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.7 0.14 160);
+  --success-foreground: oklch(0.15 0.03 160);
+  --warning: oklch(0.78 0.15 75);
+  --warning-foreground: oklch(0.2 0.04 75);
+  --border: oklch(0.34 0.025 277);
+  --input: oklch(0.36 0.03 277);
+  --ring: oklch(0.68 0.19 277);
+  --chart-1: oklch(0.68 0.19 277);
+  --chart-2: oklch(0.72 0.15 165);
+  --chart-3: oklch(0.78 0.15 75);
+  --chart-4: oklch(0.7 0.18 25);
+  --chart-5: oklch(0.7 0.12 230);
 }
 
 @theme inline {

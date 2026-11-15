@@ -257,7 +257,7 @@ function QueueCard({
         !isActive && "border-amber-200/80 bg-amber-50/25",
       )}
     >
-      <CardContent className="flex flex-1 flex-col p-5">
+      <CardContent className="flex flex-1 flex-col p-5 pt-7 sm:p-6 sm:pt-8">
         <div className="flex items-start gap-3">
           <span
             className={cn(
